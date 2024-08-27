@@ -9,6 +9,10 @@
 #include <random>
 #include <filesystem>
 
+#include <fmt/core.h>
+#include <fmt/color.h>
+#include <fmt/ranges.h>
+#include <nlohmann/json.hpp>
 #include <BS_thread_pool.hpp>
 #include <indicators/progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
@@ -19,16 +23,14 @@
 #define DEBUG_QKD_LDPC false
 
 #define RATE_ADAPTIVE_QBER true
-#define INTERACTIVE_MODE false
+#define INTERACTIVE_MODE true
 
-using namespace std;
-using namespace filesystem;
-using namespace indicators;
+namespace fs = std::filesystem;
 
-const string DENSE_MATRIX_DIRECTORY_PATH = "C:\\Users\\AGENT\\Desktop\\QKD_LDPC_CPP\\parity_check_matrices\\";
-const string ALIST_MATRICES_DIRECTORY_PATH = "C:\\Users\\AGENT\\Desktop\\QKD_LDPC_CPP\\alist_matrices\\matrices_PEG_seed_43\\";
-const string ALIST_MATRICES_DIRECTORY_PATH_SIM = "C:\\Users\\AGENT\\Desktop\\QKD_LDPC_CPP\\alist_matrices\\matrices_for_simulations\\";
-const string RESULTS_DIRECTORY_PATH = "C:\\Users\\AGENT\\Desktop\\QKD_LDPC_CPP\\results\\";
+const fs::path DENSE_MATRIX_DIRECTORY_PATH = fs::path(SOURCE_DIR) / "dense_matrices";
+const fs::path ALIST_MATRICES_DIRECTORY_PATH = fs::path(SOURCE_DIR) / "alist_sparse_matrices/matrices_PEG_seed_43";
+const fs::path ALIST_MATRICES_DIRECTORY_PATH_SIM = fs::path(SOURCE_DIR) / "alist_sparse_matrices/matrices_for_simulations";
+const fs::path RESULTS_DIRECTORY_PATH = fs::path(SOURCE_DIR) / "results";
 
 const size_t THREADS_NUMBER = 16;
 const size_t SIMULATION_SEED = time(nullptr);
@@ -55,8 +57,8 @@ struct H_matrix {
 struct sim_input
 {
     int sim_number{};
-    path matrix_path{};
-    vector<double> QBER{};
+    fs::path matrix_path{};
+    std::vector<double> QBER{};
     H_matrix matrix{};
 };
 
@@ -81,7 +83,7 @@ struct trial_result
 struct sim_result
 {
     size_t sim_number{};
-    string matrix_filename{};
+    std::string matrix_filename{};
     double code_rate{};
     double actual_QBER{};
     size_t max_iterations_successful_sp{};
@@ -94,9 +96,8 @@ void print_array(const T* const array, size_t array_length)
 {
     for (size_t i = 0; i < array_length; i++)
     {
-        cout << array[i] << " ";
+        fmt::print(fg(fmt::color::blue), "{} ", array[i]);
     }
-    cout << "\n\n";
 }
 
 template <typename T>
@@ -106,11 +107,10 @@ void print_regular_matrix(const T* const* matrix, size_t rows_number, size_t col
     {
         for (size_t j = 0; j < cols_number; j++)
         {
-            cout << matrix[i][j] << " ";
+            fmt::print(fg(fmt::color::blue), "{} ", matrix[i][j]);
         }
-        cout << endl;
+        fmt::print("\n");
     }
-    cout << endl;
 }
 
 template <typename T>
@@ -120,66 +120,68 @@ void print_irregular_matrix(const T* const* matrix, size_t rows_number, const in
     {
         for (size_t j = 0; j < rows_length[i]; j++)
         {
-            cout << matrix[i][j] << " ";
+            fmt::print(fg(fmt::color::blue), "{} ", matrix[i][j]);
         }
-        cout << endl;
+        fmt::print("\n");
     }
-    cout << endl;
 }
 
-vector<path> get_all_files_in_directory(const string& directory_path) 
+std::vector<fs::path> get_file_paths_in_directory(const fs::path& directory_path) 
 {
-    vector<path> file_paths;
-
+    std::vector<fs::path> file_paths;
     try 
     {
-        if (exists(directory_path) && is_directory(directory_path)) 
+        if (fs::exists(directory_path) && fs::is_directory(directory_path)) 
         {
-            for (const auto& entry : directory_iterator(directory_path)) 
+            for (const auto& entry : fs::directory_iterator(directory_path)) 
             {
-                if (is_regular_file(entry.path())) {
+                if (fs::is_regular_file(entry.path())) 
+                {
                     file_paths.push_back(entry.path());
                 }
             }
         }
+        else
+        {
+            throw std::runtime_error("Directory doesn't exist.");
+        }
     }
-    catch (const filesystem_error& e) {
-        cerr << "Filesystem error: " << e.what() << endl;
-    }
-    catch (const exception& e) {
-        cerr << "General error: " << e.what() << endl;
+    catch (const std::exception& e) 
+    {
+        fmt::print(stderr, fg(fmt::color::red), "An error occurred while getting file paths in directory: {}\n", directory_path.string());
+        throw;
     }
 
     return file_paths;
 }
 
-string select_matrix_file(const vector<path>& matrix_paths)
+std::string select_matrix_file(const std::vector<fs::path>& matrix_paths)
 {
-    cout << "Choose file: " << endl;
+    std::cout << "Choose file: " << std::endl;
     for (size_t i = 0; i < matrix_paths.size(); i++)
     {
-        cout << i + 1 << ". " << matrix_paths[i].filename() << endl;
+        std::cout << i + 1 << ". " << matrix_paths[i].filename() << std::endl;
     }
 
     int file_index;
-    cin >> file_index;
+    std::cin >> file_index;
     file_index -= 1;
     if (file_index < 0 || file_index >= static_cast<int>(matrix_paths.size())) {
-        cout << "Wrong input" << endl;
+        std::cout << "Wrong input" << std::endl;
         return "";
     }
 
     return matrix_paths[file_index].string();
 }
 
-bool write_file(const vector<sim_result>& data, string directory) {
+bool write_file(const std::vector<sim_result>& data, std::string directory) {
     try
     {
-        string filename = directory + "qkd_ldpc_cpp(trial_num=" 
-            + to_string(TRIALS_NUMBER) + "(max_sum_prod_iters=" + to_string(MAX_SUM_PRODUCT_ITERATIONS)
-            + ",seed=" + to_string(SIMULATION_SEED) + ").csv";
-        fstream fout;
-        fout.open(filename, ios::out | ios::trunc);
+        std::string filename = directory + "qkd_ldpc_cpp(trial_num=" 
+            + std::to_string(TRIALS_NUMBER) + "(max_sum_prod_iters=" + std::to_string(MAX_SUM_PRODUCT_ITERATIONS)
+            + ",seed=" + std::to_string(SIMULATION_SEED) + ").csv";
+        std::fstream fout;
+        fout.open(filename, std::ios::out | std::ios::trunc);
         for (size_t i = 0; i < data.size(); i++)
         {
             fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << data[i].code_rate << ";" << data[i].actual_QBER
@@ -195,22 +197,22 @@ bool write_file(const vector<sim_result>& data, string directory) {
     }
 }
 
-vector<double> get_QBERs(double start, double end, double step) 
+std::vector<double> get_QBERs(double start, double end, double step) 
 {
-    vector<double> QBER;
+    std::vector<double> QBER;
     if (step <= 0) 
     {
-        cerr << "Error: Step must be positive." << endl;
+        std::cerr << "Error: Step must be positive." << std::endl;
         return QBER;
     }
     else if(start <= 0 || start >= 1 || end <= 0 || end >= 1 || start >= end)
     {
-        cerr << "Error: Invalid start or end values. Start & end must be in the range [0, 1], and start must be less than end." << endl;
+        std::cerr << "Error: Invalid start or end values. Start & end must be in the range [0, 1], and start must be less than end." << std::endl;
         return QBER;
     }
     else if (step > end - start)
     {
-        cerr << "Error: Step is too large." << endl;
+        std::cerr << "Error: Step is too large." << std::endl;
         return QBER;
     }
 
@@ -223,7 +225,7 @@ vector<double> get_QBERs(double start, double end, double step)
 }
 
 #if RATE_ADAPTIVE_QBER
-vector<double> get_rate_adaptive_QBERs(double start, double step, double code_rate)
+std::vector<double> get_rate_adaptive_QBERs(double start, double step, double code_rate)
 {
     if (code_rate <= 0.25)
     {
@@ -249,7 +251,7 @@ vector<double> get_rate_adaptive_QBERs(double start, double step, double code_ra
 }
 #endif
 
-void get_bit_nodes(const vector<vector<int>>& matrix, const int* const bit_nodes_weight, int**& bit_nodes_out)
+void get_bit_nodes(const std::vector<std::vector<int>>& matrix, const int* const bit_nodes_weight, int**& bit_nodes_out)
 {
     size_t num_bit_nodes = matrix[0].size();
     size_t num_check_nodes = matrix.size();
@@ -271,7 +273,7 @@ void get_bit_nodes(const vector<vector<int>>& matrix, const int* const bit_nodes
     }
 }
 
-void get_check_nodes(const vector<vector<int>>& matrix, const int* const check_nodes_weight, int**& check_nodes_out)
+void get_check_nodes(const std::vector<std::vector<int>>& matrix, const int* const check_nodes_weight, int**& check_nodes_out)
 {
     size_t num_bit_nodes = matrix[0].size();
     size_t num_check_nodes = matrix.size();
@@ -359,16 +361,16 @@ bool arrays_equal(const int* const array1, const int* const array2, const size_t
     return true;
 }
 
-bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
-    vector<string> line_vec;
-    ifstream file(matrix_path);
+bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
+    std::vector<std::string> line_vec;
+    std::ifstream file(matrix_path);
 
     if (!file.is_open()) 
     {
-        cerr << "Error: Could not open the file " << matrix_path << endl;
+        std::cerr << "Error: Could not open the file " << matrix_path << std::endl;
         return false;
     }
-    string line;
+    std::string line;
 
     while (getline(file, line)) 
     {
@@ -378,17 +380,17 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
 
     if (line_vec.empty()) 
     {
-        cerr << "Error: File is empty or could not be read properly." << endl;
+        std::cerr << "Error: File is empty or could not be read properly." << std::endl;
         return false;
     }
 
-    vector<vector<int>> vec_int;
+    std::vector<std::vector<int>> vec_int;
     try 
     {
         for (const auto& line : line_vec) 
         {
-            istringstream iss(line);
-            vector<int> numbers;
+            std::istringstream iss(line);
+            std::vector<int> numbers;
             int number;
             while (iss >> number) 
             {
@@ -397,20 +399,20 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
             vec_int.push_back(numbers);
         }
     }
-    catch (const exception& e) 
+    catch (const std::exception& e) 
     {
-        cerr << "Error: An exception occurred while parsing the file: " << e.what() << endl;
+        std::cerr << "Error: An exception occurred while parsing the file: " << e.what() << std::endl;
         return false;
     }
 
     if (vec_int.size() < 4) {
-        cerr << "Error: Insufficient data in the file." << endl;
+        std::cerr << "Error: Insufficient data in the file." << std::endl;
         return false;
     }
 
     if (vec_int[0].size() != 2 || vec_int[1].size() != 2) 
     {
-        cerr << "Error: Wrong format." << endl;
+        std::cerr << "Error: Wrong format." << std::endl;
         return false;
     }
 
@@ -427,18 +429,18 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
 
     if (vec_int.size() < curr_line + num_bit_nodes + num_check_nodes)
     {
-        cerr << "Error: Insufficient data in the file." << endl;
+        std::cerr << "Error: Insufficient data in the file." << std::endl;
         return false;
     }
 
     if (col_num != num_bit_nodes) 
     {
-        cerr << "Error: The number of columns (" << col_num << ") is not the same as the length of the third line (" << num_bit_nodes << ")." << endl;
+        std::cerr << "Error: The number of columns (" << col_num << ") is not the same as the length of the third line (" << num_bit_nodes << ")." << std::endl;
         return false;
     }
     else if (row_num != num_check_nodes) 
     {
-        cerr << "Error: The number of rows (" << row_num << ") is not the same as the length of the fourth line (" << num_check_nodes << ")." << endl;
+        std::cerr << "Error: The number of rows (" << row_num << ") is not the same as the length of the fourth line (" << num_check_nodes << ")." << std::endl;
         return false;
     }
 
@@ -476,8 +478,8 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
         }
         if (non_zero_num != vec_int[2][i]) 
         {
-            cerr << "Error: The number of non-zero elements (" << non_zero_num << ") in the line (" 
-                << curr_line + i + 1 << ") does not match the weight in the third line (" << vec_int[2][i] << ")." << endl;
+            std::cerr << "Error: The number of non-zero elements (" << non_zero_num << ") in the line (" 
+                << curr_line + i + 1 << ") does not match the weight in the third line (" << vec_int[2][i] << ")." << std::endl;
             free_matrix_H(matrix_out);
             return false;
         }
@@ -496,8 +498,8 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
         }
         if (non_zero_num != vec_int[3][i])
         {
-            cerr << "Error: The number of non-zero elements (" << non_zero_num << ") in the line ("
-                << curr_line + i + 1 << ") does not match the weight in the fourth line (" << vec_int[3][i] << ")." << endl;
+            std::cerr << "Error: The number of non-zero elements (" << non_zero_num << ") in the line ("
+                << curr_line + i + 1 << ") does not match the weight in the fourth line (" << vec_int[3][i] << ")." << std::endl;
             free_matrix_H(matrix_out);
             return false;
         }
@@ -514,8 +516,8 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
                 matrix_out.bit_nodes[i][j] = (vec_int[curr_line + i][j] - 1);
             }
         }
-    } catch (const exception& e) {
-        cerr << "Error: An exception occurred while creating bit_nodes matrix: " << e.what() << endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error: An exception occurred while creating bit_nodes matrix: " << e.what() << std::endl;
         free_matrix_H(matrix_out);
         return false;
     }
@@ -532,8 +534,8 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
             }
         }
     }
-    catch (const exception& e) {
-        cerr << "Error: An exception occurred while creating check_nodes matrix: " << e.what() << endl;
+    catch (const std::exception& e) {
+        std::cerr << "Error: An exception occurred while creating check_nodes matrix: " << e.what() << std::endl;
         free_matrix_H(matrix_out);
         return false;
     }
@@ -547,16 +549,16 @@ bool read_alist(const path& matrix_path, H_matrix& matrix_out) {
     return true;
 }
 
-bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
-    vector<string> line_vec;
-    ifstream file(matrix_path);
+bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
+    std::vector<std::string> line_vec;
+    std::ifstream file(matrix_path);
 
     if (!file.is_open())
     {
-        cerr << "Error: Could not open the file " << matrix_path << endl;
+        std::cerr << "Error: Could not open the file " << matrix_path << std::endl;
         return false;
     }
-    string line;
+    std::string line;
 
     while (getline(file, line))
     {
@@ -566,23 +568,23 @@ bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
 
     if (line_vec.empty())
     {
-        cerr << "Error: File is empty or could not be read properly." << endl;
+        std::cerr << "Error: File is empty or could not be read properly." << std::endl;
         return false;
     }
 
-    vector<vector<int>> vec_int;
+    std::vector<std::vector<int>> vec_int;
     try
     {
         for (const auto& line : line_vec)
         {
-            istringstream iss(line);
-            vector<int> numbers;
+            std::istringstream iss(line);
+            std::vector<int> numbers;
             int number;
             while (iss >> number)
             {
                 if (number != 0 && number != 1) 
                 {
-                    cerr << "Error: The parity check matrix can only take values ​​0 or 1." << endl;
+                    std::cerr << "Error: The parity check matrix can only take values ​​0 or 1." << std::endl;
                     return false;
                 }
                 numbers.push_back(number);
@@ -590,9 +592,9 @@ bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
             vec_int.push_back(numbers);
         }
     }
-    catch (const exception& e)
+    catch (const std::exception& e)
     {
-        cerr << "Error: An exception occurred while parsing the file: " << e.what() << endl;
+        std::cerr << "Error: An exception occurred while parsing the file: " << e.what() << std::endl;
         return false;
     }
 
@@ -600,7 +602,7 @@ bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
     {
         if (vec_int[0].size() != vec_int[i].size()) 
         {
-            cerr << "Error: Different lengths of rows in a matrix. " << endl;
+            std::cerr << "Error: Different lengths of rows in a matrix. " << std::endl;
             return false;
         }
     }
@@ -622,7 +624,7 @@ bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
         }
         if (curr_weight <= 0) 
         {
-            cerr << "Error: Column (" << i + 1 << ") weight cannot be equal to or less than zero. " << endl;
+            std::cerr << "Error: Column (" << i + 1 << ") weight cannot be equal to or less than zero. " << std::endl;
             free_matrix_H(matrix_out);
             return false;
         }
@@ -639,7 +641,7 @@ bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
         curr_weight = accumulate(vec_int[i].begin(), vec_int[i].end(), 0);
         if (curr_weight <= 0)
         {
-            cerr << "Error: Row (" << i + 1 << ") weight cannot be equal to or less than zero. " << endl;
+            std::cerr << "Error: Row (" << i + 1 << ") weight cannot be equal to or less than zero. " << std::endl;
             free_matrix_H(matrix_out);
             return false;
         }
@@ -680,20 +682,20 @@ bool read_raw_matrix(const path& matrix_path, H_matrix& matrix_out) {
 }
 
 // Generates Alice's key
-void generate_random_bit_array(mt19937& prng, size_t length, int* const random_bit_array_out) 
+void generate_random_bit_array(std::mt19937& prng, size_t length, int* const random_bit_array_out) 
 {
-    uniform_int_distribution<int> distribution(0, 1);
+    std::uniform_int_distribution<int> distribution(0, 1);
     for (int i = 0; i < length; ++i) {
         random_bit_array_out[i] = distribution(prng);
     }
 }
 
 // Generates Bob's key by making errors in Alice's key with a given QBER probability (Uniform distribution)
-double introduce_errors(mt19937& prng, const int* const bit_array, size_t array_length, double error_probability, int* const bit_array_with_errors_out) {
+double introduce_errors(std::mt19937& prng, const int* const bit_array, size_t array_length, double error_probability, int* const bit_array_with_errors_out) {
     size_t num_errors = static_cast<size_t>(array_length * error_probability);
     if (num_errors == 0)
     {
-        copy(bit_array, bit_array + array_length, bit_array_with_errors_out);
+        std::copy(bit_array, bit_array + array_length, bit_array_with_errors_out);
     }
     else
     {
@@ -704,7 +706,7 @@ double introduce_errors(mt19937& prng, const int* const bit_array, size_t array_
         }
 
         shuffle(error_positions, error_positions + array_length, prng);
-        copy(bit_array, bit_array + array_length, bit_array_with_errors_out);
+        std::copy(bit_array, bit_array + array_length, bit_array_with_errors_out);
 
         for (size_t i = 0; i < num_errors; ++i)
         {
@@ -718,7 +720,7 @@ double introduce_errors(mt19937& prng, const int* const bit_array, size_t array_
 
 void calculate_syndrome_regular(const int* const bit_array, const H_matrix& matrix, int* const syndrome_out)
 {
-    fill(syndrome_out, syndrome_out + matrix.num_check_nodes, 0);
+    std::fill(syndrome_out, syndrome_out + matrix.num_check_nodes, 0);
     for (size_t i = 0; i < matrix.num_check_nodes; i++)
     {
         for (size_t j = 0; j < matrix.max_check_nodes_weight; j++)
@@ -730,7 +732,7 @@ void calculate_syndrome_regular(const int* const bit_array, const H_matrix& matr
 
 void calculate_syndrome_irregular(const int* const bit_array, const H_matrix& matrix, int* const syndrome_out)
 {
-    fill(syndrome_out, syndrome_out + matrix.num_check_nodes, 0);
+    std::fill(syndrome_out, syndrome_out + matrix.num_check_nodes, 0);
     for (size_t i = 0; i < matrix.num_check_nodes; i++)
     {
         for (size_t j = 0; j < matrix.check_nodes_weight[i]; j++)
@@ -830,7 +832,7 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
             }
         }
 
-        fill(check_pos_idx, check_pos_idx + matrix.num_bit_nodes, 0);
+        std::fill(check_pos_idx, check_pos_idx + matrix.num_bit_nodes, 0);
         for (size_t j = 0; j < matrix.num_check_nodes; j++)
         {
             row_prod = (syndrome[j]) ? -1. : 1.;
@@ -859,7 +861,7 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
 
         for (size_t i = 0; i < matrix.num_bit_nodes; i++)
         {
-            total_bit_llr[i] = accumulate(check_to_bit_msg[i], check_to_bit_msg[i] + matrix.max_bit_nodes_weight, bit_array_llr[i]);
+            total_bit_llr[i] = std::accumulate(check_to_bit_msg[i], check_to_bit_msg[i] + matrix.max_bit_nodes_weight, bit_array_llr[i]);
             if (total_bit_llr[i] <= 0)
             {
                 bit_array_out[i] = 1;
@@ -898,7 +900,7 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
             return { curr_iteration + 1, true};
         }
 
-        fill(bit_pos_idx, bit_pos_idx + matrix.num_check_nodes, 0);
+        std::fill(bit_pos_idx, bit_pos_idx + matrix.num_check_nodes, 0);
         for (size_t i = 0; i < matrix.num_bit_nodes; i++)
         {
             col_sum = total_bit_llr[i];
@@ -997,7 +999,7 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
             }
         }
 
-        fill(check_pos_idx, check_pos_idx + matrix.num_bit_nodes, 0);
+        std::fill(check_pos_idx, check_pos_idx + matrix.num_bit_nodes, 0);
         for (size_t j = 0; j < matrix.num_check_nodes; j++)
         {
             row_prod = (syndrome[j]) ? -1. : 1.;
@@ -1026,7 +1028,7 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
 
         for (size_t i = 0; i < matrix.num_bit_nodes; i++)
         {
-            total_bit_llr[i] = accumulate(check_to_bit_msg[i], check_to_bit_msg[i] + matrix.bit_nodes_weight[i], bit_array_llr[i]);
+            total_bit_llr[i] = std::accumulate(check_to_bit_msg[i], check_to_bit_msg[i] + matrix.bit_nodes_weight[i], bit_array_llr[i]);
             if (total_bit_llr[i] <= 0)
             {
                 bit_array_out[i] = 1;
@@ -1065,7 +1067,7 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
             return { curr_iteration + 1, true};
         }
 
-        fill(bit_pos_idx, bit_pos_idx + matrix.num_check_nodes, 0);
+        std::fill(bit_pos_idx, bit_pos_idx + matrix.num_check_nodes, 0);
         for (size_t i = 0; i < matrix.num_bit_nodes; i++)
         {
             col_sum = total_bit_llr[i];
@@ -1204,14 +1206,14 @@ LDPC_result QKD_LDPC_irregular(const int* const alice_bit_array, const int* cons
     return ldpc_res;
 }
 
-bool QKD_LDPC_interactive_simulation(string alist_mat_dir_path, double QBER_start, double QBER_end, double QBER_step)
+bool QKD_LDPC_interactive_simulation(std::string alist_mat_dir_path, double QBER_start, double QBER_end, double QBER_step)
 {
     H_matrix matrix;
-    vector<path> matrix_paths = get_all_files_in_directory(alist_mat_dir_path);
-    string matrix_path = select_matrix_file(matrix_paths);
+    std::vector<fs::path> matrix_paths = get_file_paths_in_directory(alist_mat_dir_path);
+    std::string matrix_path = select_matrix_file(matrix_paths);
     if (matrix_path.empty())
     {
-        cerr << "Error: Matrix path is empty." << endl;
+        std::cerr << "Error: Matrix path is empty." << std::endl;
         return false;
     }
 
@@ -1221,23 +1223,23 @@ bool QKD_LDPC_interactive_simulation(string alist_mat_dir_path, double QBER_star
         return false;
     }
 
-    cout << ((matrix.is_regular) ? "\nMatrix H is regular.\n" : "\nMatrix H is irregular.\n") << endl;
+    std::cout << ((matrix.is_regular) ? "\nMatrix H is regular.\n" : "\nMatrix H is irregular.\n") << std::endl;
     size_t num_check_nodes = matrix.num_check_nodes;
     size_t num_bit_nodes = matrix.num_bit_nodes;
     int* alice_bit_array = new int[num_bit_nodes];
     int* bob_bit_array = new int[num_bit_nodes];
 
-    mt19937 prng(SIMULATION_SEED);
-    vector<double> QBER = get_QBERs(QBER_start, QBER_end, QBER_step);
+    std::mt19937 prng(SIMULATION_SEED);
+    std::vector<double> QBER = get_QBERs(QBER_start, QBER_end, QBER_step);
     for (size_t i = 0; i < QBER.size(); i++)
     {
         generate_random_bit_array(prng, num_bit_nodes, alice_bit_array);
         double actual_QBER = introduce_errors(prng, alice_bit_array, num_bit_nodes, QBER[i], bob_bit_array);
 
-        cout << "Actual QBER: " << actual_QBER << endl;
+        std::cout << "Actual QBER: " << actual_QBER << std::endl;
         if (actual_QBER == 0.)
         {
-            cerr << "Error: Array size is too small for QBER." << endl;
+            std::cerr << "Error: Array size is too small for QBER." << std::endl;
             free_matrix_H(matrix);
             delete[] alice_bit_array;
             delete[] bob_bit_array;
@@ -1249,7 +1251,7 @@ bool QKD_LDPC_interactive_simulation(string alist_mat_dir_path, double QBER_star
         {
             error_num += alice_bit_array[i] ^ bob_bit_array[i];
         }
-        cout << "Errors number: " << error_num << endl;
+        std::cout << "Errors number: " << error_num << std::endl;
 
         LDPC_result try_result;
         if (matrix.is_regular)
@@ -1260,8 +1262,8 @@ bool QKD_LDPC_interactive_simulation(string alist_mat_dir_path, double QBER_star
         {
             try_result = QKD_LDPC_irregular(alice_bit_array, bob_bit_array, actual_QBER, matrix);
         }
-        cout << "Iterations performed: " << try_result.sp_res.iterations_num << endl;
-        cout << ((try_result.keys_match && try_result.sp_res.syndromes_match) ? "Error reconciliation SUCCESSFUL\n" : "Error reconciliation FAILED\n") << endl;
+        std::cout << "Iterations performed: " << try_result.sp_res.iterations_num << std::endl;
+        std::cout << ((try_result.keys_match && try_result.sp_res.syndromes_match) ? "Error reconciliation SUCCESSFUL\n" : "Error reconciliation FAILED\n") << std::endl;
     }
 
     free_matrix_H(matrix);
@@ -1270,14 +1272,14 @@ bool QKD_LDPC_interactive_simulation(string alist_mat_dir_path, double QBER_star
     return true;
 }
 
-bool prepare_sim_inputs(const vector<path>& matrix_paths, double QBER_start, double QBER_end, double QBER_step, vector<sim_input>& sim_inputs_out)
+bool prepare_sim_inputs(const std::vector<fs::path>& matrix_paths, double QBER_start, double QBER_end, double QBER_step, std::vector<sim_input>& sim_inputs_out)
 {
     bool is_ready = true;
     for (size_t i = 0; i < matrix_paths.size(); i++)
     {
         if (!read_alist(matrix_paths[i], sim_inputs_out[i].matrix))
         {
-            cerr << "Error: Matrix " + matrix_paths[i].filename().string() + " is corrupted!" << endl;
+           std::cerr << "Error: Matrix " + matrix_paths[i].filename().string() + " is corrupted!" << std::endl;
             is_ready = false;
             break;
         }
@@ -1296,7 +1298,7 @@ bool prepare_sim_inputs(const vector<path>& matrix_paths, double QBER_start, dou
 
 trial_result run_trial(const H_matrix& matrix, double QBER, size_t seed)
 {
-    mt19937 prng(seed);
+    std::mt19937 prng(seed);
 
     trial_result result;
     int* alice_bit_array = new int[matrix.num_bit_nodes];
@@ -1322,8 +1324,9 @@ trial_result run_trial(const H_matrix& matrix, double QBER, size_t seed)
     return result;
 }
 
-vector<sim_result> QKD_LDPC_auto_simulation(const vector<sim_input>& sim_in)
+std::vector<sim_result> QKD_LDPC_auto_simulation(const std::vector<sim_input>& sim_in)
 {
+    using namespace indicators;
     size_t sim_total = 0;
     for (size_t i = 0; i < sim_in.size(); i++)
     {
@@ -1331,7 +1334,7 @@ vector<sim_result> QKD_LDPC_auto_simulation(const vector<sim_input>& sim_in)
     }
 
     size_t trials_total = sim_total * TRIALS_NUMBER;
-    show_console_cursor(false);
+    indicators::show_console_cursor(false);
     indicators::ProgressBar bar{
       option::BarWidth{50},
       option::Start{" ["},
@@ -1349,23 +1352,23 @@ vector<sim_result> QKD_LDPC_auto_simulation(const vector<sim_input>& sim_in)
 
     size_t curr_sim = 0;
     size_t iteration = 0;
-    vector<sim_result> sim_results(sim_total);
-    vector<trial_result> trial_results(TRIALS_NUMBER);
+    std::vector<sim_result> sim_results(sim_total);
+    std::vector<trial_result> trial_results(TRIALS_NUMBER);
 
-    mt19937 prng(SIMULATION_SEED);
-    uniform_int_distribution<size_t> distribution(0, numeric_limits<size_t>::max());
+    std::mt19937 prng(SIMULATION_SEED);
+    std::uniform_int_distribution<size_t> distribution(0, std::numeric_limits<size_t>::max());
 
     BS::thread_pool pool(THREADS_NUMBER);
     for (size_t i = 0; i < sim_in.size(); i++)
     {
         const H_matrix& matrix = sim_in[i].matrix;
         double code_rate = static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes;
-        string matrix_filename = sim_in[i].matrix_path.filename().string();
+        std::string matrix_filename = sim_in[i].matrix_path.filename().string();
         for (size_t j = 0; j < sim_in[i].QBER.size(); j++)
         {
             iteration += TRIALS_NUMBER;
             bar.set_option(option::PostfixText{
-                        to_string(iteration) + "/" + to_string(trials_total)
+                        std::to_string(iteration) + "/" + std::to_string(trials_total)
                 });
 
             double QBER = sim_in[i].QBER[j];
@@ -1418,14 +1421,14 @@ int main()
     QKD_LDPC_interactive_simulation(ALIST_MATRICES_DIRECTORY_PATH, QBER_START_VALUE, QBER_END_VALUE, QBER_STEP_VALUE);
 
     #else
-    vector<path> matrix_paths = get_all_files_in_directory(ALIST_MATRICES_DIRECTORY_PATH_SIM);
+    std::vector<fs::path> matrix_paths = get_file_paths_in_directory(ALIST_MATRICES_DIRECTORY_PATH_SIM);
     if (matrix_paths.empty())
     {
-        cerr << "Error: Matrix folder is empty." << endl;
+        std::cerr << "Error: Matrix folder is empty." << std::endl;
         return false;
     }
 
-    vector<sim_input> sim_inputs(matrix_paths.size());
+    std::vector<sim_input> sim_inputs(matrix_paths.size());
     bool is_ready_to_sim = prepare_sim_inputs(matrix_paths, QBER_START_VALUE, QBER_END_VALUE, QBER_STEP_VALUE, sim_inputs);
     if (!is_ready_to_sim)
     {
@@ -1434,26 +1437,26 @@ int main()
             free_matrix_H(sim_inputs[i].matrix);
         }
         sim_inputs.clear();
-        cout << "Dynamic memory for storing matrices has been successfully freed!" << endl;
+        std::cout << "Dynamic memory for storing matrices has been successfully freed!" << std::endl;
         return false;
     }
-    vector<sim_result> sim_results = QKD_LDPC_auto_simulation(sim_inputs);
+    std::vector<sim_result> sim_results = QKD_LDPC_auto_simulation(sim_inputs);
 
     for (size_t i = 0; i < sim_inputs.size(); i++)
     {
         free_matrix_H(sim_inputs[i].matrix);
     }
     sim_inputs.clear();
-    cout << "Dynamic memory for storing matrices has been successfully freed!" << endl;
+    std::cout << "Dynamic memory for storing matrices has been successfully freed!" << std::endl;
 
-    cout << "The results will be written to the directory: " << RESULTS_DIRECTORY_PATH << endl;
+    std::cout << "The results will be written to the directory: " << RESULTS_DIRECTORY_PATH << std::endl;
     if (write_file(sim_results, RESULTS_DIRECTORY_PATH))
     {
-        cout << "The results were written to the file successfully!" << endl;
+        std::cout << "The results were written to the file successfully!" << std::endl;
     }
     else
     {
-        cerr << "An error occurred while writing to the file" << endl;
+        std::cerr << "An error occurred while writing to the file" << std::endl;
     }
     #endif
     return true;

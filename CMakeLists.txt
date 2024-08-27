@@ -37,7 +37,7 @@ CPMAddPackage(
     OPTIONS
         "JSON_BuildTests OFF")
 
-#add_definitions(-DSOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_definitions(-DSOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_executable(QKD_LDPC 
     src/main.cpp
     )
