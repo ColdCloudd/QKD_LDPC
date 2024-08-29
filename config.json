@@ -3,18 +3,39 @@
     "trials_number": 100,
     "use_config_simulation_seed": false,
     "simulation_seed": 666,
-    "shuffle_mode": true,
-    "sifted_key_length": 10240,
-    "initial_syndrome_power": 3,
-    "qber": [0.01, 0.03, 0.05, 0.06, 0.08, 0.1, 0.12, 0.15],
-    "combination_elements":[
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4]
-    ],
-    "use_specified_combinations": true,
-    "combinations": [[1,1,1,1,1], [0,2,2], [4]],
-    "trace_winnow": false
+    "interactive_mode": true,
+    "sum_product_max_iterations": 100,
+    "use_dense_matrices": false,
+    "trace_qkd_ldpc": false,
+    "trace_sum_product": false,
+    "trace_sum_product_llr": false,
+    "enable_sum_product_msg_llr_threshold": true,
+    "sum_product_msg_llr_threshold": 100,
+    "code_rate_QBER_parameters": 
+    [
+        {
+            "code_rate": 0.25,
+            "QBER_begin": 0.01,
+            "QBER_end": 0.04,
+            "QBER_step": 0.01
+        },
+        {
+            "code_rate": 0.5,
+            "QBER_begin": 0.01,
+            "QBER_end": 0.1,
+            "QBER_step": 0.01
+        },
+        {
+            "code_rate": 0.75,
+            "QBER_begin": 0.01,
+            "QBER_end": 0.19,
+            "QBER_step": 0.01
+        },
+        {
+            "code_rate": 0.9,
+            "QBER_begin": 0.01,
+            "QBER_end": 0.25,
+            "QBER_step": 0.01
+        }
+    ]
 }

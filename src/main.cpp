@@ -1,12 +1,12 @@
 ﻿#include <cmath>
-#include <iostream>
-#include <fstream>
+#include <random>
 #include <vector>
 #include <string>
-#include <sstream>
 #include <numeric> 
+#include <fstream>
+#include <sstream>
+#include <iostream>
 #include <algorithm>
-#include <random>
 #include <filesystem>
 
 #include <fmt/core.h>
@@ -17,32 +17,56 @@
 #include <indicators/progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 
-#define DEBUG_SUM_PRODUCT false
-#define DEBUG_SUM_PRODUCT_LLR_TRACE false
-#define DEBUG_SUM_PRODUCT_MSG_LLR_THRESHOLD false
-#define DEBUG_QKD_LDPC false
-
-#define RATE_ADAPTIVE_QBER true
-#define INTERACTIVE_MODE true
-
+using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-const fs::path DENSE_MATRIX_DIRECTORY_PATH = fs::path(SOURCE_DIR) / "dense_matrices";
-const fs::path ALIST_MATRICES_DIRECTORY_PATH = fs::path(SOURCE_DIR) / "alist_sparse_matrices/matrices_PEG_seed_43";
-const fs::path ALIST_MATRICES_DIRECTORY_PATH_SIM = fs::path(SOURCE_DIR) / "alist_sparse_matrices/matrices_for_simulations";
-const fs::path RESULTS_DIRECTORY_PATH = fs::path(SOURCE_DIR) / "results";
+const fs::path CONFIG_PATH = fs::path(SOURCE_DIR) / "config.json";
+const fs::path DENSE_MATRIX_DIR_PATH = fs::path(SOURCE_DIR) / "dense_matrices";
+const fs::path ALIST_MATRIX_DIR_PATH = fs::path(SOURCE_DIR) / "alist_sparse_matrices";
+const fs::path RESULTS_DIR_PATH = fs::path(SOURCE_DIR) / "results";
 
-const size_t THREADS_NUMBER = 16;
-const size_t SIMULATION_SEED = time(nullptr);
-const size_t TRIALS_NUMBER = 100;
+struct R_QBER_params
+{
+    double code_rate{};
+    double QBER_begin{};
+    double QBER_end{};
+    double QBER_step{};
+};
 
-const double QBER_START_VALUE = 0.01;
-const double QBER_END_VALUE = 0.3;
-const double QBER_STEP_VALUE = 0.005;
-const size_t MAX_SUM_PRODUCT_ITERATIONS = 100;
-const double MESSAGE_THRESHOLD = 100.;
+struct config_data
+{
+    // Number of threads for parallelizing runs
+    size_t THREADS_NUMBER{};
 
-struct H_matrix {
+    // Number of runs with one combination
+    size_t TRIALS_NUMBER{};
+
+    // Seed of simulation
+    size_t SIMULATION_SEED{};
+
+    bool INTERACTIVE_MODE{};
+
+    size_t SUM_PRODUCT_MAX_ITERATIONS{};
+
+    bool USE_DENSE_MATRICES{};
+
+    bool TRACE_QKD_LDPC{};
+
+    bool TRACE_SUM_PRODUCT{};
+
+    bool TRACE_SUM_PRODUCT_LLR{};
+
+    bool ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD{};
+
+    double SUM_PRODUCT_MSG_LLR_THRESHOLD{};
+
+    std::vector<R_QBER_params> R_QBER_PARAMETERS{};
+};
+
+config_data CFG;
+
+struct H_matrix 
+{
     int** bit_nodes = nullptr;
     int* bit_nodes_weight = nullptr;
     int** check_nodes = nullptr;
@@ -90,6 +114,115 @@ struct sim_result
     double ratio_trials_successful_sp{};
     double ratio_trials_successful_ldpc{};
 };
+
+config_data get_config_data(fs::path config_path)
+{
+    if (!fs::exists(config_path))
+    {
+        throw std::runtime_error("Configuration file not found: " + config_path.string());
+    }
+
+    std::ifstream config_file(config_path);
+    if (!config_file.is_open())
+    {
+        throw std::runtime_error("Failed to open configuration file: " + config_path.string());
+    }
+
+    json config = json::parse(config_file);
+    config_file.close();
+    if (config.empty())
+    {
+        throw std::runtime_error("Configuration file is empty: " + config_path.string());
+    }
+    
+    try
+    {
+        config_data cfg{};
+        cfg.THREADS_NUMBER = config["threads_number"].template get<size_t>();
+        if (cfg.THREADS_NUMBER < 1)
+        {
+            throw std::runtime_error("Number of threads must be >= 1!");
+        }
+
+        cfg.TRIALS_NUMBER = config["trials_number"].template get<size_t>();
+        if (cfg.TRIALS_NUMBER < 1)
+        {
+            throw std::runtime_error("Number of trials must be >= 1!");
+        }
+
+        if (config["use_config_simulation_seed"].template get<bool>())
+        {
+            cfg.SIMULATION_SEED = config["simulation_seed"].template get<size_t>();
+        }
+        else
+        {
+            cfg.SIMULATION_SEED = time(nullptr);
+        }
+        
+        cfg.INTERACTIVE_MODE = config["interactive_mode"].template get<bool>();
+
+        cfg.SUM_PRODUCT_MAX_ITERATIONS = config["sum_product_max_iterations"].template get<size_t>();
+        if (cfg.SUM_PRODUCT_MAX_ITERATIONS < 1)
+        {
+            throw std::runtime_error("Minimum number of sum-product iterations must be >= 1!");
+        }
+
+        cfg.USE_DENSE_MATRICES = config["use_dense_matrices"].template get<bool>();
+        cfg.TRACE_QKD_LDPC = config["trace_qkd_ldpc"].template get<bool>();
+        cfg.TRACE_SUM_PRODUCT = config["trace_sum_product"].template get<bool>();
+        cfg.TRACE_SUM_PRODUCT_LLR = config["trace_sum_product_llr"].template get<bool>();
+        cfg.ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD = config["enable_sum_product_msg_llr_threshold"].template get<bool>();
+
+        if (cfg.ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD)
+        {
+            cfg.SUM_PRODUCT_MSG_LLR_THRESHOLD = config["sum_product_msg_llr_threshold"].template get<double>();
+            if (cfg.SUM_PRODUCT_MSG_LLR_THRESHOLD <= 0.)
+            {
+                throw std::runtime_error("Sum-product message LLR threshold must be > 0!");
+            }
+        }
+        
+        const auto& params = config["code_rate_QBER_parameters"];
+        for (const auto& p : params) 
+        {
+            cfg.R_QBER_PARAMETERS.push_back({p["code_rate"].template get<double>(), p["QBER_begin"].template get<double>(),
+             p["QBER_end"].template get<double>(), p["QBER_step"].template get<double>()});
+        }
+
+        if (cfg.R_QBER_PARAMETERS.empty())
+        {
+            throw std::runtime_error("Array with code rate and QBER parameters is empty!");
+        }
+        for (size_t i = 0; i < cfg.R_QBER_PARAMETERS.size(); i++)
+        {
+            if (cfg.R_QBER_PARAMETERS[i].code_rate <= 0. || cfg.R_QBER_PARAMETERS[i].code_rate >= 1.)
+            {
+                throw std::runtime_error("Code rate(R) must be: 0 < R < 1!");
+            }
+            if (cfg.R_QBER_PARAMETERS[i].QBER_begin <= 0. || cfg.R_QBER_PARAMETERS[i].QBER_begin >= 1. 
+            || cfg.R_QBER_PARAMETERS[i].QBER_end <= 0. || cfg.R_QBER_PARAMETERS[i].QBER_end >= 1. 
+            || cfg.R_QBER_PARAMETERS[i].QBER_begin >= cfg.R_QBER_PARAMETERS[i].QBER_end)
+            {
+                throw std::runtime_error("Invalid QBER begin or end parameters. QBER must be: 0 < QBER < 1, and begin must be less than end.");
+            }
+            if (cfg.R_QBER_PARAMETERS[i].QBER_step > cfg.R_QBER_PARAMETERS[i].QBER_end - cfg.R_QBER_PARAMETERS[i].QBER_begin)
+            {
+                throw std::runtime_error("QBER step is too large.");
+            }
+        }
+        std::sort(cfg.R_QBER_PARAMETERS.begin(), cfg.R_QBER_PARAMETERS.end(), 
+              [](R_QBER_params& a, R_QBER_params& b){
+                  return (a.code_rate < b.code_rate);
+              });
+
+        return cfg;
+    }
+    catch(const std::exception& e)
+    {
+        fmt::print(stderr, fg(fmt::color::red),"An error occurred while reading a configuration parameter.\n");
+        throw;
+    }
+}
 
 template <typename T>
 void print_array(const T* const array, size_t array_length)
@@ -155,101 +288,71 @@ std::vector<fs::path> get_file_paths_in_directory(const fs::path& directory_path
     return file_paths;
 }
 
-std::string select_matrix_file(const std::vector<fs::path>& matrix_paths)
+fs::path select_matrix_file(const std::vector<fs::path>& matrix_paths)
 {
-    std::cout << "Choose file: " << std::endl;
+    fmt::print(fg(fmt::color::green), "Choose file: \n");
     for (size_t i = 0; i < matrix_paths.size(); i++)
     {
-        std::cout << i + 1 << ". " << matrix_paths[i].filename() << std::endl;
+        fmt::print(fg(fmt::color::green), "{0}. {1}\n", i + 1, matrix_paths[i].filename().string());
     }
 
     int file_index;
     std::cin >> file_index;
     file_index -= 1;
-    if (file_index < 0 || file_index >= static_cast<int>(matrix_paths.size())) {
-        std::cout << "Wrong input" << std::endl;
-        return "";
+    if (file_index < 0 || file_index >= static_cast<int>(matrix_paths.size())) 
+    {
+        throw std::runtime_error("Wrong file number.");
     }
-
-    return matrix_paths[file_index].string();
+    return matrix_paths[file_index];
 }
 
-bool write_file(const std::vector<sim_result>& data, std::string directory) {
+void write_file(const std::vector<sim_result>& data, fs::path directory) 
+{
     try
     {
-        std::string filename = directory + "qkd_ldpc_cpp(trial_num=" 
-            + std::to_string(TRIALS_NUMBER) + "(max_sum_prod_iters=" + std::to_string(MAX_SUM_PRODUCT_ITERATIONS)
-            + ",seed=" + std::to_string(SIMULATION_SEED) + ").csv";
+        std::string filename = "ldpc(trial_num=" + std::to_string(CFG.TRIALS_NUMBER) + ",max_sum_prod_iters=" + 
+        std::to_string(CFG.SUM_PRODUCT_MAX_ITERATIONS) + ",seed=" + std::to_string(CFG.SIMULATION_SEED) + ").csv";
+        fs::path result_file_path = directory / filename;
+
         std::fstream fout;
-        fout.open(filename, std::ios::out | std::ios::trunc);
+        fout.open(result_file_path, std::ios::out | std::ios::trunc);
+        fout << "№;MATRIX_FILENAME;CODE_RATE;QBER;MAX_ITERATIONS_SUCCESSFUL_SUM_PRODUCT;RATIO_TRIALS_SUCCESSFUL_SUM_PRODUCT;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
         for (size_t i = 0; i < data.size(); i++)
         {
             fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << data[i].code_rate << ";" << data[i].actual_QBER
-                << ";" << data[i].max_iterations_successful_sp << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
+                 << ";" << data[i].max_iterations_successful_sp << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
         }
         fout.close();
-        return true;
     }
     catch (const std::exception& ex)
     {
-        printf("Error occured (write_file): %s", ex.what());
-        return false;
+        fmt::print(stderr, fg(fmt::color::red),"An error occurred while writing to the file.\n");
+        throw;
     }
 }
 
-std::vector<double> get_QBERs(double start, double end, double step) 
+// R_QBER_parameters must be sorted
+std::vector<double> get_rate_based_QBER_range(double code_rate, std::vector<R_QBER_params>& R_QBER_parameters) 
 {
     std::vector<double> QBER;
-    if (step <= 0) 
+    for (size_t i = 0; i < R_QBER_parameters.size(); i++)
     {
-        std::cerr << "Error: Step must be positive." << std::endl;
-        return QBER;
+        if (code_rate <= R_QBER_parameters[i].code_rate || i == R_QBER_parameters.size() - 1)
+        {
+            for (double value = R_QBER_parameters[i].QBER_begin; value <= R_QBER_parameters[i].QBER_end;
+             value += R_QBER_parameters[i].QBER_step) 
+            {
+                QBER.push_back(value);
+            }
+            break;
+        }
     }
-    else if(start <= 0 || start >= 1 || end <= 0 || end >= 1 || start >= end)
+    if (QBER.empty())
     {
-        std::cerr << "Error: Invalid start or end values. Start & end must be in the range [0, 1], and start must be less than end." << std::endl;
-        return QBER;
+        throw std::runtime_error("An error occurred when generating a QBER range based on code rate.");
     }
-    else if (step > end - start)
-    {
-        std::cerr << "Error: Step is too large." << std::endl;
-        return QBER;
-    }
-
-    for (double value = start; value <= end; value += step) 
-    {
-        QBER.push_back(value);
-    }
-
     return QBER;
 }
-
-#if RATE_ADAPTIVE_QBER
-std::vector<double> get_rate_adaptive_QBERs(double start, double step, double code_rate)
-{
-    if (code_rate <= 0.25)
-    {
-        return get_QBERs(start, 0.04 + step, step);
-    }
-    else if (code_rate <= 0.5)
-    {
-        return get_QBERs(start, 0.1 + step, step);
-    }
-    else if (code_rate <= 0.75)
-    {
-        return get_QBERs(start, 0.19 + step, step);
-    }
-    else if (code_rate <= 0.9)
-    {
-        return get_QBERs(start, 0.25 + step, step);
-    }
-    else
-    {
-        return get_QBERs(start, 0.3 + step, step);
-    }
-
-}
-#endif
 
 void get_bit_nodes(const std::vector<std::vector<int>>& matrix, const int* const bit_nodes_weight, int**& bit_nodes_out)
 {
@@ -361,14 +464,14 @@ bool arrays_equal(const int* const array1, const int* const array2, const size_t
     return true;
 }
 
-bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
+void read_sparse_alist_matrix(const fs::path& matrix_path, H_matrix& matrix_out) 
+{
     std::vector<std::string> line_vec;
     std::ifstream file(matrix_path);
 
     if (!file.is_open()) 
     {
-        std::cerr << "Error: Could not open the file " << matrix_path << std::endl;
-        return false;
+        throw std::runtime_error("Failed to open file: " + matrix_path.string());
     }
     std::string line;
 
@@ -380,8 +483,7 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
 
     if (line_vec.empty()) 
     {
-        std::cerr << "Error: File is empty or could not be read properly." << std::endl;
-        return false;
+        throw std::runtime_error("File is empty or cannot be read properly: " + matrix_path.string());
     }
 
     std::vector<std::vector<int>> vec_int;
@@ -401,19 +503,18 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
     }
     catch (const std::exception& e) 
     {
-        std::cerr << "Error: An exception occurred while parsing the file: " << e.what() << std::endl;
-        return false;
+        fmt::print(stderr, fg(fmt::color::red), "An error occurred while parsing file: {}\n", matrix_path.string());
+        throw;
     }
 
-    if (vec_int.size() < 4) {
-        std::cerr << "Error: Insufficient data in the file." << std::endl;
-        return false;
+    if (vec_int.size() < 4) 
+    {
+        throw std::runtime_error("Insufficient data in the file: " + matrix_path.string());
     }
 
     if (vec_int[0].size() != 2 || vec_int[1].size() != 2) 
     {
-        std::cerr << "Error: Wrong format." << std::endl;
-        return false;
+        throw std::runtime_error("File format does not match the alist format: " + matrix_path.string());
     }
 
     size_t col_num = vec_int[0][0];
@@ -429,19 +530,18 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
 
     if (vec_int.size() < curr_line + num_bit_nodes + num_check_nodes)
     {
-        std::cerr << "Error: Insufficient data in the file." << std::endl;
-        return false;
+        throw std::runtime_error("Insufficient data in the file: " + matrix_path.string());
     }
 
     if (col_num != num_bit_nodes) 
     {
-        std::cerr << "Error: The number of columns (" << col_num << ") is not the same as the length of the third line (" << num_bit_nodes << ")." << std::endl;
-        return false;
+        throw std::runtime_error("Number of columns '" + std::to_string(col_num) + "' is not the same as the length of the third line '"
+         + std::to_string(num_bit_nodes) + "'. File: " + matrix_path.string());
     }
     else if (row_num != num_check_nodes) 
     {
-        std::cerr << "Error: The number of rows (" << row_num << ") is not the same as the length of the fourth line (" << num_check_nodes << ")." << std::endl;
-        return false;
+        throw std::runtime_error("Number of rows '" + std::to_string(row_num) + "' is not the same as the length of the fourth line '"
+         + std::to_string(num_check_nodes) + "'. File: " + matrix_path.string());
     }
 
     bool is_regular = true;
@@ -478,10 +578,10 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
         }
         if (non_zero_num != vec_int[2][i]) 
         {
-            std::cerr << "Error: The number of non-zero elements (" << non_zero_num << ") in the line (" 
-                << curr_line + i + 1 << ") does not match the weight in the third line (" << vec_int[2][i] << ")." << std::endl;
             free_matrix_H(matrix_out);
-            return false;
+            throw std::runtime_error("Number of non-zero elements '" + std::to_string(non_zero_num) + "' in the line '"
+         + std::to_string(curr_line + i + 1) + "' does not match the weight in the third line '" + std::to_string(vec_int[2][i])
+         + "'. File: " + matrix_path.string());
         }
     }
 
@@ -498,14 +598,15 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
         }
         if (non_zero_num != vec_int[3][i])
         {
-            std::cerr << "Error: The number of non-zero elements (" << non_zero_num << ") in the line ("
-                << curr_line + i + 1 << ") does not match the weight in the fourth line (" << vec_int[3][i] << ")." << std::endl;
             free_matrix_H(matrix_out);
-            return false;
+            throw std::runtime_error("Number of non-zero elements '" + std::to_string(non_zero_num) + "' in the line '"
+         + std::to_string(curr_line + i + 1) + "' does not match the weight in the fourth line '" + std::to_string(vec_int[3][i]) 
+         + "'. File: " + matrix_path.string());
         }
     }
     
-    try {
+    try
+    {
         curr_line = 4;
         matrix_out.bit_nodes = new int* [num_bit_nodes];
         for (size_t i = 0; i < num_bit_nodes; ++i)
@@ -516,13 +617,15 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
                 matrix_out.bit_nodes[i][j] = (vec_int[curr_line + i][j] - 1);
             }
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Error: An exception occurred while creating bit_nodes matrix: " << e.what() << std::endl;
+    } catch (const std::exception& e) 
+    {
         free_matrix_H(matrix_out);
-        return false;
+        fmt::print(stderr, fg(fmt::color::red), "An error occurred while creating 'bit_nodes' matrix from file: {}\n", matrix_path.string());
+        throw;
     }
 
-    try {
+    try 
+    {
         curr_line += num_bit_nodes;
         matrix_out.check_nodes = new int* [num_check_nodes];
         for (size_t i = 0; i < num_check_nodes; ++i) 
@@ -534,10 +637,11 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
             }
         }
     }
-    catch (const std::exception& e) {
-        std::cerr << "Error: An exception occurred while creating check_nodes matrix: " << e.what() << std::endl;
+    catch (const std::exception& e) 
+    {
         free_matrix_H(matrix_out);
-        return false;
+        fmt::print(stderr, fg(fmt::color::red), "An error occurred while creating 'check_nodes' matrix from file: {}\n", matrix_path.string());
+        throw;
     }
 
     matrix_out.num_check_nodes = row_num;
@@ -545,18 +649,16 @@ bool read_alist(const fs::path& matrix_path, H_matrix& matrix_out) {
     matrix_out.max_check_nodes_weight = max_row_weight;
     matrix_out.max_bit_nodes_weight = max_col_weight;
     matrix_out.is_regular = is_regular;
-
-    return true;
 }
 
-bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
+void read_dense_matrix(const fs::path& matrix_path, H_matrix& matrix_out) 
+{
     std::vector<std::string> line_vec;
     std::ifstream file(matrix_path);
 
     if (!file.is_open())
     {
-        std::cerr << "Error: Could not open the file " << matrix_path << std::endl;
-        return false;
+        throw std::runtime_error("Failed to open file: " + matrix_path.string());
     }
     std::string line;
 
@@ -568,8 +670,7 @@ bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
 
     if (line_vec.empty())
     {
-        std::cerr << "Error: File is empty or could not be read properly." << std::endl;
-        return false;
+        throw std::runtime_error("File is empty or cannot be read properly: " + matrix_path.string());
     }
 
     std::vector<std::vector<int>> vec_int;
@@ -584,8 +685,7 @@ bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
             {
                 if (number != 0 && number != 1) 
                 {
-                    std::cerr << "Error: The parity check matrix can only take values ​​0 or 1." << std::endl;
-                    return false;
+                    throw std::runtime_error("Parity check matrix can only take values ​​0 or 1.");
                 }
                 numbers.push_back(number);
             }
@@ -594,16 +694,15 @@ bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Error: An exception occurred while parsing the file: " << e.what() << std::endl;
-        return false;
+        fmt::print(stderr, fg(fmt::color::red), "An error occurred while parsing file: {}\n", matrix_path.string());
+        throw;
     }
 
     for (size_t i = 0; i < vec_int.size(); i++)
     {
         if (vec_int[0].size() != vec_int[i].size()) 
         {
-            std::cerr << "Error: Different lengths of rows in a matrix. " << std::endl;
-            return false;
+            throw std::runtime_error("Different lengths of rows in a matrix. File: " + matrix_path.string());
         }
     }
 
@@ -624,9 +723,8 @@ bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
         }
         if (curr_weight <= 0) 
         {
-            std::cerr << "Error: Column (" << i + 1 << ") weight cannot be equal to or less than zero. " << std::endl;
             free_matrix_H(matrix_out);
-            return false;
+            throw std::runtime_error("Column '" + std::to_string(i + 1) + "' weight cannot be equal to or less than zero. File: " + matrix_path.string());
         }
         matrix_out.bit_nodes_weight[i] = curr_weight;
         if (curr_weight > max_col_weight) 
@@ -641,9 +739,8 @@ bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
         curr_weight = accumulate(vec_int[i].begin(), vec_int[i].end(), 0);
         if (curr_weight <= 0)
         {
-            std::cerr << "Error: Row (" << i + 1 << ") weight cannot be equal to or less than zero. " << std::endl;
             free_matrix_H(matrix_out);
-            return false;
+            throw std::runtime_error("Row '" + std::to_string(i + 1) + "' weight cannot be equal to or less than zero. File: " + matrix_path.string());
         }
         matrix_out.check_nodes_weight[i] = curr_weight;
         if (curr_weight > max_row_weight)
@@ -677,8 +774,6 @@ bool read_raw_matrix(const fs::path& matrix_path, H_matrix& matrix_out) {
     matrix_out.max_check_nodes_weight = max_row_weight;
     matrix_out.max_bit_nodes_weight = max_col_weight;
     matrix_out.is_regular = is_regular;
-
-    return true;
 }
 
 // Generates Alice's key
@@ -690,8 +785,9 @@ void generate_random_bit_array(std::mt19937& prng, size_t length, int* const ran
     }
 }
 
-// Generates Bob's key by making errors in Alice's key with a given QBER probability (Uniform distribution)
-double introduce_errors(std::mt19937& prng, const int* const bit_array, size_t array_length, double error_probability, int* const bit_array_with_errors_out) {
+// Generates Bob's key by making errors in Alice's key 
+double introduce_errors(std::mt19937& prng, const int* const bit_array, size_t array_length, double error_probability, int* const bit_array_with_errors_out) 
+{
     size_t num_errors = static_cast<size_t>(array_length * error_probability);
     if (num_errors == 0)
     {
@@ -781,11 +877,9 @@ void threshold_matrix_irregular(double* const* matrix, const size_t& rows_number
 SP_result sum_product_decoding_regular(const double* const bit_array_llr, const H_matrix& matrix, const int* const syndrome,
     const size_t& max_num_iterations, const double& msg_threshold, int* const bit_array_out)
 {
-    #if DEBUG_SUM_PRODUCT_LLR_TRACE
-    double max_llr_c2b;
-    double max_llr_b2c;
+    double max_llr_c2b = 0.;
+    double max_llr_b2c = 0.;
     double max_llr = 0.;
-    #endif
 
     double** bit_to_check_msg = new double* [matrix.num_check_nodes];
     for (size_t i = 0; i < matrix.num_check_nodes; i++)
@@ -819,11 +913,12 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
     size_t curr_iteration = 0;
     while (curr_iteration != max_num_iterations)
     {
-    #if DEBUG_SUM_PRODUCT
-        cout << "Iteration: " << curr_iteration + 1 << endl;
-    #endif
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "Iteration: {}\n", curr_iteration + 1);
+        }
 
-        // # Compute extrinsic messages from check nodes to bit nodes (Step 1: Check messages)
+        // Compute extrinsic messages from check nodes to bit nodes (Step 1: Check messages)
         for (size_t i = 0; i < matrix.num_check_nodes; i++)
         {
             for (size_t j = 0; j < matrix.max_check_nodes_weight; j++)
@@ -850,14 +945,15 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
             }
         }
 
-    #if DEBUG_SUM_PRODUCT_MSG_LLR_THRESHOLD
-        threshold_matrix_regular(check_to_bit_msg, matrix.num_bit_nodes, matrix.max_bit_nodes_weight, msg_threshold);
-    #endif
-
-    #if DEBUG_SUM_PRODUCT
-        cout << "E: " << endl;
-        print_regular_matrix(check_to_bit_msg, matrix.num_bit_nodes, matrix.max_bit_nodes_weight);
-    #endif
+        if (CFG.ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD)
+        {
+            threshold_matrix_regular(check_to_bit_msg, matrix.num_bit_nodes, matrix.max_bit_nodes_weight, msg_threshold);
+        }
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "E:\n");
+            print_regular_matrix(check_to_bit_msg, matrix.num_bit_nodes, matrix.max_bit_nodes_weight);
+        }
 
         for (size_t i = 0; i < matrix.num_bit_nodes; i++)
         {
@@ -872,25 +968,28 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
             }
         }
 
-    #if DEBUG_SUM_PRODUCT
-        cout << "L: " << endl;
-        print_array(total_bit_llr, matrix.num_bit_nodes);
-        cout << "z: " << endl;
-        print_array(bit_array_out, matrix.num_bit_nodes);
-    #endif
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "L:\n");
+            print_array(total_bit_llr, matrix.num_bit_nodes);
+            fmt::print(fg(fmt::color::blue), "z:\n");
+            print_array(bit_array_out, matrix.num_bit_nodes);
+        }
 
         calculate_syndrome_regular(bit_array_out, matrix, decision_syndrome);
 
-    #if DEBUG_SUM_PRODUCT
-        cout << "s: " << endl;
-        print_array(decision_syndrome, matrix.num_check_nodes);
-    #endif
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "s:\n");
+            print_array(decision_syndrome, matrix.num_check_nodes);
+        }
 
         if (arrays_equal(syndrome, decision_syndrome, matrix.num_check_nodes))
         {
-    #if DEBUG_SUM_PRODUCT_LLR_TRACE
-            cout << "MAX_LLR = " << max_llr << endl;
-    #endif
+            if (CFG.TRACE_SUM_PRODUCT_LLR)
+            {
+                fmt::print(fg(fmt::color::blue), "MAX_LLR = {}\n", max_llr);
+            }
             free_matrix(bit_to_check_msg, matrix.num_check_nodes);
             free_matrix(check_to_bit_msg, matrix.num_bit_nodes);
             delete[] bit_pos_idx;
@@ -913,27 +1012,29 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
             }
         }
 
-    #if DEBUG_SUM_PRODUCT_MSG_LLR_THRESHOLD
-        threshold_matrix_regular(bit_to_check_msg, matrix.num_check_nodes, matrix.max_check_nodes_weight, msg_threshold);
-    #endif
-
-    #if DEBUG_SUM_PRODUCT
-        cout << "M: " << endl;
-        print_regular_matrix(bit_to_check_msg, matrix.num_check_nodes, matrix.max_check_nodes_weight);
-    #endif
-
-    #if DEBUG_SUM_PRODUCT_LLR_TRACE
-        max_llr_c2b = get_max_llr_regular(check_to_bit_msg, matrix.max_bit_nodes_weight, matrix.num_bit_nodes);
-        max_llr_b2c = get_max_llr_regular(bit_to_check_msg, matrix.max_check_nodes_weight, matrix.num_check_nodes);
-        max_llr = max({ max_llr, max_llr_c2b, max_llr_b2c });
-    #endif
-
+        if (CFG.ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD)
+        {
+            threshold_matrix_regular(bit_to_check_msg, matrix.num_check_nodes, matrix.max_check_nodes_weight, msg_threshold);
+        }
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "M:\n");
+            print_regular_matrix(bit_to_check_msg, matrix.num_check_nodes, matrix.max_check_nodes_weight);
+        }
+        if (CFG.TRACE_SUM_PRODUCT_LLR)
+        {
+            max_llr_c2b = get_max_llr_regular(check_to_bit_msg, matrix.max_bit_nodes_weight, matrix.num_bit_nodes);
+            max_llr_b2c = get_max_llr_regular(bit_to_check_msg, matrix.max_check_nodes_weight, matrix.num_check_nodes);
+            max_llr = std::max({ max_llr, max_llr_c2b, max_llr_b2c });
+        }
+        
         curr_iteration++;
     }
 
-    #if DEBUG_SUM_PRODUCT_LLR_TRACE
-    cout << "MAX_LLR = " << max_llr << endl;
-    #endif
+    if (CFG.TRACE_SUM_PRODUCT_LLR)
+    {
+        fmt::print(fg(fmt::color::blue), "MAX_LLR = {}\n", max_llr);
+    }
 
     free_matrix(bit_to_check_msg, matrix.num_check_nodes);
     free_matrix(check_to_bit_msg, matrix.num_bit_nodes);
@@ -942,17 +1043,15 @@ SP_result sum_product_decoding_regular(const double* const bit_array_llr, const 
     delete[] total_bit_llr;
     delete[] decision_syndrome;
 
-    return { max_num_iterations, false};
+    return {max_num_iterations, false};
 }
 
 SP_result sum_product_decoding_irregular(const double* const bit_array_llr, const H_matrix& matrix, const int* const syndrome, 
     const size_t& max_num_iterations, const double& msg_threshold, int* const bit_array_out)
 {
-    #if DEBUG_SUM_PRODUCT_LLR_TRACE
-    double max_llr_c2b;
-    double max_llr_b2c;
+    double max_llr_c2b = 0.;
+    double max_llr_b2c = 0.;
     double max_llr = 0.;
-    #endif
 
     double** bit_to_check_msg = new double* [matrix.num_check_nodes];
     for (size_t i = 0; i < matrix.num_check_nodes; i++)
@@ -986,11 +1085,12 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
     size_t curr_iteration = 0;
     while (curr_iteration != max_num_iterations)
     {
-        #if DEBUG_SUM_PRODUCT
-        cout << "Iteration: " << curr_iteration + 1 << endl;
-        #endif
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "Iteration: {}\n", curr_iteration + 1);
+        }
 
-        // # Compute extrinsic messages from check nodes to bit nodes (Step 1: Check messages)
+        // Compute extrinsic messages from check nodes to bit nodes (Step 1: Check messages)
         for (size_t i = 0; i < matrix.num_check_nodes; i++)
         {
             for (size_t j = 0; j < matrix.check_nodes_weight[i]; j++)
@@ -1017,14 +1117,15 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
             }
         }
 
-        #if DEBUG_SUM_PRODUCT_MSG_LLR_THRESHOLD
-        threshold_matrix_irregular(check_to_bit_msg, matrix.num_bit_nodes, matrix.bit_nodes_weight, msg_threshold);
-        #endif
-
-        #if DEBUG_SUM_PRODUCT
-        cout << "E: " << endl;
-        print_irregular_matrix(check_to_bit_msg, matrix.num_bit_nodes, matrix.bit_nodes_weight);
-        #endif
+        if (CFG.ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD)
+        {
+            threshold_matrix_irregular(check_to_bit_msg, matrix.num_bit_nodes, matrix.bit_nodes_weight, msg_threshold);
+        }
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "E:\n");
+            print_irregular_matrix(check_to_bit_msg, matrix.num_bit_nodes, matrix.bit_nodes_weight);
+        }
 
         for (size_t i = 0; i < matrix.num_bit_nodes; i++)
         {
@@ -1039,25 +1140,28 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
             }
         }
 
-        #if DEBUG_SUM_PRODUCT
-        cout << "L: " << endl;
-        print_array(total_bit_llr, matrix.num_bit_nodes);
-        cout << "z: " << endl;
-        print_array(bit_array_out, matrix.num_bit_nodes);
-        #endif
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "L:\n");
+            print_array(total_bit_llr, matrix.num_bit_nodes);
+            fmt::print(fg(fmt::color::blue), "z:\n");
+            print_array(bit_array_out, matrix.num_bit_nodes);
+        }
 
         calculate_syndrome_irregular(bit_array_out, matrix, decision_syndrome);
 
-        #if DEBUG_SUM_PRODUCT
-        cout << "s: " << endl;
-        print_array(decision_syndrome, matrix.num_check_nodes);
-        #endif
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "s:\n");
+            print_array(decision_syndrome, matrix.num_check_nodes);
+        }
 
         if (arrays_equal(syndrome, decision_syndrome, matrix.num_check_nodes))
         {
-            #if DEBUG_SUM_PRODUCT_LLR_TRACE
-            cout << "MAX_LLR = " << max_llr << endl;
-            #endif
+            if (CFG.TRACE_SUM_PRODUCT_LLR)
+            {
+                fmt::print(fg(fmt::color::blue), "MAX_LLR = {}\n", max_llr);
+            }
             free_matrix(bit_to_check_msg, matrix.num_check_nodes);
             free_matrix(check_to_bit_msg, matrix.num_bit_nodes);
             delete[] bit_pos_idx;
@@ -1080,27 +1184,29 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
             }
         }
 
-        #if DEBUG_SUM_PRODUCT_MSG_LLR_THRESHOLD
-        threshold_matrix_irregular(bit_to_check_msg, matrix.num_check_nodes, matrix.check_nodes_weight, msg_threshold);
-        #endif
-
-        #if DEBUG_SUM_PRODUCT
-        cout << "M: " << endl;
-        print_irregular_matrix(bit_to_check_msg, matrix.num_check_nodes, matrix.check_nodes_weight);
-        #endif
-
-        #if DEBUG_SUM_PRODUCT_LLR_TRACE
-        max_llr_c2b = get_max_llr_irregular(check_to_bit_msg, matrix.bit_nodes_weight, matrix.num_bit_nodes);
-        max_llr_b2c = get_max_llr_irregular(bit_to_check_msg, matrix.check_nodes_weight, matrix.num_check_nodes);
-        max_llr = max({ max_llr, max_llr_c2b, max_llr_b2c });
-        #endif
+        if (CFG.ENABLE_SUM_PRODUCT_MSG_LLR_THRESHOLD)
+        {
+            threshold_matrix_irregular(bit_to_check_msg, matrix.num_check_nodes, matrix.check_nodes_weight, msg_threshold);
+        }
+        if (CFG.TRACE_SUM_PRODUCT)
+        {
+            fmt::print(fg(fmt::color::blue), "M:\n");
+            print_irregular_matrix(bit_to_check_msg, matrix.num_check_nodes, matrix.check_nodes_weight);
+        }
+        if (CFG.TRACE_SUM_PRODUCT_LLR)
+        {
+            max_llr_c2b = get_max_llr_irregular(check_to_bit_msg, matrix.bit_nodes_weight, matrix.num_bit_nodes);
+            max_llr_b2c = get_max_llr_irregular(bit_to_check_msg, matrix.check_nodes_weight, matrix.num_check_nodes);
+            max_llr = std::max({ max_llr, max_llr_c2b, max_llr_b2c });
+        }
         
         curr_iteration++;
     }
 
-    #if DEBUG_SUM_PRODUCT_LLR_TRACE
-    cout << "MAX_LLR = " << max_llr << endl;
-    #endif
+    if (CFG.TRACE_SUM_PRODUCT_LLR)
+    {
+        fmt::print(fg(fmt::color::blue), "MAX_LLR = {}\n", max_llr);
+    }
 
     free_matrix(bit_to_check_msg, matrix.num_check_nodes);
     free_matrix(check_to_bit_msg, matrix.num_bit_nodes);
@@ -1109,7 +1215,7 @@ SP_result sum_product_decoding_irregular(const double* const bit_array_llr, cons
     delete[] total_bit_llr;
     delete[] decision_syndrome;
 
-    return { max_num_iterations, false};
+    return {max_num_iterations, false};
 }
 
 LDPC_result QKD_LDPC_regular(const int* const alice_bit_array, const int* const bob_bit_array, const double& QBER, const H_matrix& matrix)
@@ -1121,36 +1227,40 @@ LDPC_result QKD_LDPC_regular(const int* const alice_bit_array, const int* const 
         apriori_llr[i] = (bob_bit_array[i] ? -log_p : log_p);
     }
 
-    #if DEBUG_QKD_LDPC
-    cout << "r: " << endl;
-    print_array(apriori_llr, matrix.num_bit_nodes);
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "r:\n");
+        print_array(apriori_llr, matrix.num_bit_nodes);
+    }
 
     int* alice_syndrome = new int[matrix.num_check_nodes];
     calculate_syndrome_regular(alice_bit_array, matrix, alice_syndrome);
 
-    #if DEBUG_QKD_LDPC
-    cout << "Alice syndrome: " << endl;
-    print_array(alice_syndrome, matrix.num_check_nodes);
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "Alice syndrome:\n");
+        print_array(alice_syndrome, matrix.num_check_nodes);
+    }
 
     int* bob_solution = new int[matrix.num_bit_nodes];
     LDPC_result ldpc_res;
-    ldpc_res.sp_res = sum_product_decoding_regular(apriori_llr, matrix, alice_syndrome, MAX_SUM_PRODUCT_ITERATIONS,
-        MESSAGE_THRESHOLD, bob_solution);
+    ldpc_res.sp_res = sum_product_decoding_regular(apriori_llr, matrix, alice_syndrome, CFG.SUM_PRODUCT_MAX_ITERATIONS,
+        CFG.SUM_PRODUCT_MSG_LLR_THRESHOLD, bob_solution);
 
-    #if DEBUG_QKD_LDPC
-    cout << "Bob corrected bit array: " << endl;
-    print_array(bob_solution, matrix.num_bit_nodes);
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "Bob corrected bit array:\n");
+        print_array(bob_solution, matrix.num_bit_nodes);
+    }
 
     ldpc_res.keys_match = arrays_equal(alice_bit_array, bob_solution, matrix.num_bit_nodes);
 
-    #if DEBUG_QKD_LDPC
-    cout << "Iterations performed: " << ldpc_res.sp_res.iterations_num << endl;
-    cout << "Syndromes are match: " << ((ldpc_res.sp_res.syndromes_match) ? "YES" : "NO") << endl;
-    cout << "Keys are match: " << ((ldpc_res.keys_match) ? "YES" : "NO") << endl;
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "Iterations performed: {}\n", ldpc_res.sp_res.iterations_num);
+        fmt::print(fg(fmt::color::blue), "Syndromes are match: {}\n", ((ldpc_res.sp_res.syndromes_match) ? "YES" : "NO"));
+        fmt::print(fg(fmt::color::blue), "Keys are match: {}\n", ((ldpc_res.keys_match) ? "YES" : "NO"));
+    }
 
     delete[] apriori_llr;
     delete[] alice_syndrome;
@@ -1168,36 +1278,40 @@ LDPC_result QKD_LDPC_irregular(const int* const alice_bit_array, const int* cons
         apriori_llr[i] = (bob_bit_array[i] ? -log_p : log_p);
     }
 
-    #if DEBUG_QKD_LDPC
-    cout << "r: " << endl;
-    print_array(apriori_llr, matrix.num_bit_nodes);
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "r:\n");
+        print_array(apriori_llr, matrix.num_bit_nodes);
+    }
 
     int* alice_syndrome = new int[matrix.num_check_nodes];
     calculate_syndrome_irregular(alice_bit_array, matrix, alice_syndrome);
     
-    #if DEBUG_QKD_LDPC
-    cout << "Alice syndrome: " << endl;
-    print_array(alice_syndrome, matrix.num_check_nodes);
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "Alice syndrome:\n");
+        print_array(alice_syndrome, matrix.num_check_nodes);
+    }
 
     int* bob_solution = new int[matrix.num_bit_nodes];
     LDPC_result ldpc_res;
-    ldpc_res.sp_res = sum_product_decoding_irregular(apriori_llr, matrix, alice_syndrome, MAX_SUM_PRODUCT_ITERATIONS,
-        MESSAGE_THRESHOLD, bob_solution);
+    ldpc_res.sp_res = sum_product_decoding_irregular(apriori_llr, matrix, alice_syndrome, CFG.SUM_PRODUCT_MAX_ITERATIONS,
+        CFG.SUM_PRODUCT_MSG_LLR_THRESHOLD, bob_solution);
 
-    #if DEBUG_QKD_LDPC
-    cout << "Bob corrected bit array: " << endl;
-    print_array(bob_solution, matrix.num_bit_nodes);
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "Bob corrected bit array:\n");
+        print_array(bob_solution, matrix.num_bit_nodes);
+    }
 
     ldpc_res.keys_match = arrays_equal(alice_bit_array, bob_solution, matrix.num_bit_nodes);
 
-    #if DEBUG_QKD_LDPC
-    cout << "Iterations performed: " << ldpc_res.sp_res.iterations_num << endl;
-    cout << "Syndromes are match: " << ((ldpc_res.sp_res.syndromes_match) ? "YES" : "NO") << endl;
-    cout << "Keys are match: " << ((ldpc_res.keys_match) ? "YES" : "NO") << endl;
-    #endif
+    if (CFG.TRACE_QKD_LDPC)
+    {
+        fmt::print(fg(fmt::color::blue), "Iterations performed: {}\n", ldpc_res.sp_res.iterations_num);
+        fmt::print(fg(fmt::color::blue), "Syndromes are match: {}\n", ((ldpc_res.sp_res.syndromes_match) ? "YES" : "NO"));
+        fmt::print(fg(fmt::color::blue), "Keys are match: {}\n", ((ldpc_res.keys_match) ? "YES" : "NO"));
+    }
 
     delete[] apriori_llr;
     delete[] alice_syndrome;
@@ -1206,44 +1320,44 @@ LDPC_result QKD_LDPC_irregular(const int* const alice_bit_array, const int* cons
     return ldpc_res;
 }
 
-bool QKD_LDPC_interactive_simulation(std::string alist_mat_dir_path, double QBER_start, double QBER_end, double QBER_step)
+void QKD_LDPC_interactive_simulation(fs::path matrix_dir_path)
 {
     H_matrix matrix;
-    std::vector<fs::path> matrix_paths = get_file_paths_in_directory(alist_mat_dir_path);
-    std::string matrix_path = select_matrix_file(matrix_paths);
-    if (matrix_path.empty())
+    std::vector<fs::path> matrix_paths = get_file_paths_in_directory(matrix_dir_path);
+    fs::path matrix_path = select_matrix_file(matrix_paths);
+
+    if (CFG.USE_DENSE_MATRICES)
     {
-        std::cerr << "Error: Matrix path is empty." << std::endl;
-        return false;
+        read_dense_matrix(matrix_path, matrix);
+    }
+    else
+    {
+        read_sparse_alist_matrix(matrix_path, matrix);
     }
 
-    bool is_ready = read_alist(matrix_path, matrix);
-    if (!is_ready)
-    {
-        return false;
-    }
-
-    std::cout << ((matrix.is_regular) ? "\nMatrix H is regular.\n" : "\nMatrix H is irregular.\n") << std::endl;
+    fmt::print(fg(fmt::color::green), "{}\n", ((matrix.is_regular) ? "Matrix H is regular." : "Matrix H is irregular."));
+    
     size_t num_check_nodes = matrix.num_check_nodes;
     size_t num_bit_nodes = matrix.num_bit_nodes;
     int* alice_bit_array = new int[num_bit_nodes];
     int* bob_bit_array = new int[num_bit_nodes];
 
-    std::mt19937 prng(SIMULATION_SEED);
-    std::vector<double> QBER = get_QBERs(QBER_start, QBER_end, QBER_step);
+    std::mt19937 prng(CFG.SIMULATION_SEED);
+    double code_rate = static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes;
+    std::vector<double> QBER = get_rate_based_QBER_range(code_rate, CFG.R_QBER_PARAMETERS);
     for (size_t i = 0; i < QBER.size(); i++)
     {
         generate_random_bit_array(prng, num_bit_nodes, alice_bit_array);
         double actual_QBER = introduce_errors(prng, alice_bit_array, num_bit_nodes, QBER[i], bob_bit_array);
 
-        std::cout << "Actual QBER: " << actual_QBER << std::endl;
+        fmt::print(fg(fmt::color::green), "Actual QBER: {}\n", actual_QBER);
+
         if (actual_QBER == 0.)
         {
-            std::cerr << "Error: Array size is too small for QBER." << std::endl;
             free_matrix_H(matrix);
             delete[] alice_bit_array;
             delete[] bob_bit_array;
-            return false;
+            throw std::runtime_error("Key size '" + std::to_string(num_bit_nodes) + "' is too small for QBER.");
         }
 
         int error_num = 0;
@@ -1251,7 +1365,7 @@ bool QKD_LDPC_interactive_simulation(std::string alist_mat_dir_path, double QBER
         {
             error_num += alice_bit_array[i] ^ bob_bit_array[i];
         }
-        std::cout << "Errors number: " << error_num << std::endl;
+        fmt::print(fg(fmt::color::green), "Number of errors in a key: {}\n", error_num);
 
         LDPC_result try_result;
         if (matrix.is_regular)
@@ -1262,38 +1376,35 @@ bool QKD_LDPC_interactive_simulation(std::string alist_mat_dir_path, double QBER
         {
             try_result = QKD_LDPC_irregular(alice_bit_array, bob_bit_array, actual_QBER, matrix);
         }
-        std::cout << "Iterations performed: " << try_result.sp_res.iterations_num << std::endl;
-        std::cout << ((try_result.keys_match && try_result.sp_res.syndromes_match) ? "Error reconciliation SUCCESSFUL\n" : "Error reconciliation FAILED\n") << std::endl;
+        fmt::print(fg(fmt::color::green), "Iterations performed: {}\n", try_result.sp_res.iterations_num);
+        fmt::print(fg(fmt::color::green), "{}\n\n", ((try_result.keys_match && try_result.sp_res.syndromes_match) 
+        ? "Error reconciliation SUCCESSFUL" : "Error reconciliation FAILED"));
     }
 
     free_matrix_H(matrix);
     delete[] alice_bit_array;
     delete[] bob_bit_array;
-    return true;
 }
 
-bool prepare_sim_inputs(const std::vector<fs::path>& matrix_paths, double QBER_start, double QBER_end, double QBER_step, std::vector<sim_input>& sim_inputs_out)
+void prepare_sim_inputs(const std::vector<fs::path>& matrix_paths, std::vector<sim_input>& sim_inputs_out)
 {
-    bool is_ready = true;
     for (size_t i = 0; i < matrix_paths.size(); i++)
     {
-        if (!read_alist(matrix_paths[i], sim_inputs_out[i].matrix))
+        if (CFG.USE_DENSE_MATRICES)
         {
-           std::cerr << "Error: Matrix " + matrix_paths[i].filename().string() + " is corrupted!" << std::endl;
-            is_ready = false;
-            break;
+            read_dense_matrix(matrix_paths[i], sim_inputs_out[i].matrix);
         }
+        else
+        {
+            read_sparse_alist_matrix(matrix_paths[i], sim_inputs_out[i].matrix);
+        }
+        
         sim_inputs_out[i].sim_number = i;
         sim_inputs_out[i].matrix_path = matrix_paths[i];
 
-        #if RATE_ADAPTIVE_QBER
-        double rate = static_cast<double>(sim_inputs_out[i].matrix.num_check_nodes) / sim_inputs_out[i].matrix.num_bit_nodes;
-        sim_inputs_out[i].QBER = get_rate_adaptive_QBERs(QBER_start, QBER_step, rate);
-        #else
-        sim_inputs_out[i].QBER = get_QBERs(QBER_start, QBER_end, QBER_step);
-        #endif
+        double code_rate = static_cast<double>(sim_inputs_out[i].matrix.num_check_nodes) / sim_inputs_out[i].matrix.num_bit_nodes;
+        sim_inputs_out[i].QBER = get_rate_based_QBER_range(code_rate, CFG.R_QBER_PARAMETERS);
     }
-    return is_ready;
 }
 
 trial_result run_trial(const H_matrix& matrix, double QBER, size_t seed)
@@ -1307,7 +1418,9 @@ trial_result run_trial(const H_matrix& matrix, double QBER, size_t seed)
     result.actual_QBER = introduce_errors(prng, alice_bit_array, matrix.num_bit_nodes, QBER, bob_bit_array);
     if (result.actual_QBER == 0.)
     {
-        return result;
+        delete[] alice_bit_array;
+        delete[] bob_bit_array;
+        throw std::runtime_error("Key size '" + std::to_string(matrix.num_bit_nodes) + "' is too small for QBER.");
     }
 
     if (matrix.is_regular)
@@ -1324,16 +1437,16 @@ trial_result run_trial(const H_matrix& matrix, double QBER, size_t seed)
     return result;
 }
 
-std::vector<sim_result> QKD_LDPC_auto_simulation(const std::vector<sim_input>& sim_in)
+std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input>& sim_in)
 {
     using namespace indicators;
     size_t sim_total = 0;
-    for (size_t i = 0; i < sim_in.size(); i++)
+    for(size_t i = 0; i < sim_in.size(); i++)
     {
         sim_total += sim_in[i].QBER.size();
     }
 
-    size_t trials_total = sim_total * TRIALS_NUMBER;
+    size_t trials_total = sim_total * CFG.TRIALS_NUMBER;
     indicators::show_console_cursor(false);
     indicators::ProgressBar bar{
       option::BarWidth{50},
@@ -1353,12 +1466,12 @@ std::vector<sim_result> QKD_LDPC_auto_simulation(const std::vector<sim_input>& s
     size_t curr_sim = 0;
     size_t iteration = 0;
     std::vector<sim_result> sim_results(sim_total);
-    std::vector<trial_result> trial_results(TRIALS_NUMBER);
+    std::vector<trial_result> trial_results(CFG.TRIALS_NUMBER);
 
-    std::mt19937 prng(SIMULATION_SEED);
+    std::mt19937 prng(CFG.SIMULATION_SEED);
     std::uniform_int_distribution<size_t> distribution(0, std::numeric_limits<size_t>::max());
 
-    BS::thread_pool pool(THREADS_NUMBER);
+    BS::thread_pool pool(CFG.THREADS_NUMBER);
     for (size_t i = 0; i < sim_in.size(); i++)
     {
         const H_matrix& matrix = sim_in[i].matrix;
@@ -1366,24 +1479,24 @@ std::vector<sim_result> QKD_LDPC_auto_simulation(const std::vector<sim_input>& s
         std::string matrix_filename = sim_in[i].matrix_path.filename().string();
         for (size_t j = 0; j < sim_in[i].QBER.size(); j++)
         {
-            iteration += TRIALS_NUMBER;
+            iteration += CFG.TRIALS_NUMBER;
             bar.set_option(option::PostfixText{
-                        std::to_string(iteration) + "/" + std::to_string(trials_total)
+                    std::to_string(iteration) + "/" + std::to_string(trials_total)
                 });
 
             double QBER = sim_in[i].QBER[j];
-            pool.detach_loop<size_t>(0, TRIALS_NUMBER,
+            pool.detach_loop<size_t>(0, CFG.TRIALS_NUMBER,
                 [&matrix, &QBER, &trial_results, &prng, &distribution, &bar](size_t k)
                 {
                     trial_results[k] = run_trial(matrix, QBER, distribution(prng));
-                    bar.tick();     // for correct time estimation
+                    bar.tick();     // For correct time estimation
                 });
             pool.wait();
 
             size_t trials_successful_sp = 0;
             size_t trials_successful_ldpc = 0;
             size_t max_iterations_successful_sp = 0;
-            size_t curr_sp_iterations_num;
+            size_t curr_sp_iterations_num {};
             for (size_t k = 0; k < trial_results.size(); k++)
             {
                 if (trial_results[k].ldpc_res.sp_res.syndromes_match)
@@ -1407,8 +1520,8 @@ std::vector<sim_result> QKD_LDPC_auto_simulation(const std::vector<sim_input>& s
 
             sim_results[curr_sim].actual_QBER = trial_results[0].actual_QBER;
             sim_results[curr_sim].max_iterations_successful_sp = max_iterations_successful_sp;
-            sim_results[curr_sim].ratio_trials_successful_ldpc = static_cast<double>(trials_successful_ldpc) / TRIALS_NUMBER;
-            sim_results[curr_sim].ratio_trials_successful_sp = static_cast<double>(trials_successful_sp) / TRIALS_NUMBER;
+            sim_results[curr_sim].ratio_trials_successful_ldpc = static_cast<double>(trials_successful_ldpc) / CFG.TRIALS_NUMBER;
+            sim_results[curr_sim].ratio_trials_successful_sp = static_cast<double>(trials_successful_sp) / CFG.TRIALS_NUMBER;
             curr_sim++;
         }
     }
@@ -1417,48 +1530,56 @@ std::vector<sim_result> QKD_LDPC_auto_simulation(const std::vector<sim_input>& s
 
 int main()
 {
-    #if INTERACTIVE_MODE
-    QKD_LDPC_interactive_simulation(ALIST_MATRICES_DIRECTORY_PATH, QBER_START_VALUE, QBER_END_VALUE, QBER_STEP_VALUE);
+    std::vector<sim_input> sim_inputs;
+    std::vector<sim_result> sim_results;
 
-    #else
-    std::vector<fs::path> matrix_paths = get_file_paths_in_directory(ALIST_MATRICES_DIRECTORY_PATH_SIM);
-    if (matrix_paths.empty())
+    try
     {
-        std::cerr << "Error: Matrix folder is empty." << std::endl;
-        return false;
-    }
+        CFG = get_config_data(CONFIG_PATH);
+        fs::path matrix_dir_path = ((CFG.USE_DENSE_MATRICES) ? DENSE_MATRIX_DIR_PATH : ALIST_MATRIX_DIR_PATH);
+        if (CFG.INTERACTIVE_MODE)
+        {
+            fmt::print(fg(fmt::color::purple), "INTERACTIVE MODE\n");
+            QKD_LDPC_interactive_simulation(matrix_dir_path);
+        }
+        else
+        {
+            fmt::print(fg(fmt::color::purple), "BATCH MODE\n");
+            std::vector<fs::path> matrix_paths = get_file_paths_in_directory(matrix_dir_path);
+            if (matrix_paths.empty())
+            {
+                throw std::runtime_error("Matrix folder is empty: " + matrix_dir_path.string());
+            }
 
-    std::vector<sim_input> sim_inputs(matrix_paths.size());
-    bool is_ready_to_sim = prepare_sim_inputs(matrix_paths, QBER_START_VALUE, QBER_END_VALUE, QBER_STEP_VALUE, sim_inputs);
-    if (!is_ready_to_sim)
+            sim_inputs.resize(matrix_paths.size());
+            prepare_sim_inputs(matrix_paths, sim_inputs);
+            
+            sim_results = QKD_LDPC_batch_simulation(sim_inputs);
+
+            for (size_t i = 0; i < sim_inputs.size(); i++)
+            {
+                free_matrix_H(sim_inputs[i].matrix);
+            }
+            sim_inputs.clear();
+
+            fmt::print(fg(fmt::color::green), "Dynamic memory for storing matrices has been successfully freed!\n");
+            fmt::print(fg(fmt::color::green), "The results will be written to the directory: {}\n", RESULTS_DIR_PATH.string());
+            write_file(sim_results, RESULTS_DIR_PATH);
+        }
+    }
+    catch(const std::exception& e)
     {
         for (size_t i = 0; i < sim_inputs.size(); i++)
         {
-            free_matrix_H(sim_inputs[i].matrix);
+             free_matrix_H(sim_inputs[i].matrix);
         }
         sim_inputs.clear();
-        std::cout << "Dynamic memory for storing matrices has been successfully freed!" << std::endl;
-        return false;
-    }
-    std::vector<sim_result> sim_results = QKD_LDPC_auto_simulation(sim_inputs);
+        fmt::print(fg(fmt::color::green), "Dynamic memory for storing matrices has been successfully freed!\n");
 
-    for (size_t i = 0; i < sim_inputs.size(); i++)
-    {
-        free_matrix_H(sim_inputs[i].matrix);
+        fmt::print(stderr, fg(fmt::color::red), "ERROR: {}\n", e.what());
+        return EXIT_FAILURE;
     }
-    sim_inputs.clear();
-    std::cout << "Dynamic memory for storing matrices has been successfully freed!" << std::endl;
 
-    std::cout << "The results will be written to the directory: " << RESULTS_DIRECTORY_PATH << std::endl;
-    if (write_file(sim_results, RESULTS_DIRECTORY_PATH))
-    {
-        std::cout << "The results were written to the file successfully!" << std::endl;
-    }
-    else
-    {
-        std::cerr << "An error occurred while writing to the file" << std::endl;
-    }
-    #endif
-    return true;
+    return EXIT_SUCCESS;
 }
 
