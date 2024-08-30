@@ -5,10 +5,10 @@
     "simulation_seed": 666,
     "interactive_mode": true,
     "sum_product_max_iterations": 100,
-    "use_dense_matrices": false,
-    "trace_qkd_ldpc": false,
-    "trace_sum_product": false,
-    "trace_sum_product_llr": false,
+    "use_dense_matrices": true,
+    "trace_qkd_ldpc": true,
+    "trace_sum_product": true,
+    "trace_sum_product_llr": true,
     "enable_sum_product_msg_llr_threshold": true,
     "sum_product_msg_llr_threshold": 100,
     "code_rate_QBER_parameters": 
@@ -23,6 +23,12 @@
             "code_rate": 0.5,
             "QBER_begin": 0.01,
             "QBER_end": 0.1,
+            "QBER_step": 0.01
+        },
+        {
+            "code_rate": 0.67,
+            "QBER_begin": 0.17,
+            "QBER_end": 0.181,
             "QBER_step": 0.01
         },
         {
