@@ -42,8 +42,14 @@ add_executable(QKD_LDPC
     src/main.cpp
     src/config.hpp
     src/config.cpp
+    src/utils.hpp
+    src/utils.cpp
     src/array_and_matrix_operations.hpp
     src/array_and_matrix_operations.cpp
+    src/qkd_ldpc_algorithm.hpp
+    src/qkd_ldpc_algorithm.cpp
+    src/simulation.hpp
+    src/simulation.cpp
     )
 target_include_directories(QKD_LDPC PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(QKD_LDPC BS_thread_pool fmt indicators nlohmann_json)

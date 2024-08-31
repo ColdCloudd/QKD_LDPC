@@ -1,8 +1,14 @@
 #pragma once 
 #include <random>
 #include <vector>
+#include <numeric>
+#include <fstream>
 #include <algorithm>
 #include <filesystem>
+
+#include <fmt/core.h>
+#include <fmt/color.h>
+#include <fmt/ranges.h>
 
 namespace fs = std::filesystem;
 
