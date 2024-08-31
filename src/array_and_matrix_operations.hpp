@@ -29,8 +29,6 @@ void get_bit_nodes(const std::vector<std::vector<int>> &matrix, const int *const
 void get_check_nodes(const std::vector<std::vector<int>> &matrix, const int *const check_nodes_weight, int **&check_nodes_out);
 double get_max_llr_regular(const double *const *matrix, const size_t &nodes_weight, const size_t &rows_number);
 double get_max_llr_irregular(const double *const *matrix, const int *const nodes_weight, const size_t &rows_number);
-template <typename T>
-void free_matrix(T **matrix, const size_t &rows_number);
 void free_matrix_H(H_matrix &matrix);
 bool arrays_equal(const int *const array1, const int *const array2, const size_t &array_length);
 void read_sparse_alist_matrix(const fs::path &matrix_path, H_matrix &matrix_out);
@@ -41,6 +39,17 @@ void calculate_syndrome_regular(const int *const bit_array, const H_matrix &matr
 void calculate_syndrome_irregular(const int *const bit_array, const H_matrix &matrix, int *const syndrome_out);
 void threshold_matrix_regular(double *const *matrix, const size_t &rows_number, const size_t &nodes_weight, const double &msg_threshold);
 void threshold_matrix_irregular(double *const *matrix, const size_t &rows_number, const int *const nodes_weight, const double &msg_threshold);
+
+// Freeing memory allocated for a two-dimensional dynamic array.
+template <typename T>
+void free_matrix(T **matrix, const size_t &rows_number)
+{
+    for (size_t i = 0; i < rows_number; ++i)
+    {
+        delete[] matrix[i];
+    }
+    delete[] matrix;
+}
 
 
 

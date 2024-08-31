@@ -84,17 +84,6 @@ double get_max_llr_irregular(const double *const *matrix, const int *const nodes
     return max_abs_llr;
 }
 
-// Freeing memory allocated for a two-dimensional dynamic array.
-template <typename T>
-void free_matrix(T **matrix, const size_t &rows_number)
-{
-    for (size_t i = 0; i < rows_number; ++i)
-    {
-        delete[] matrix[i];
-    }
-    delete[] matrix;
-}
-
 // Freeing memory allocated for the parity check matrix.
 void free_matrix_H(H_matrix &matrix)
 {
