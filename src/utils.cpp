@@ -1,5 +1,21 @@
 #include "utils.hpp"
 
+void print_array(const int *const array, size_t array_length)
+{
+    for (size_t i = 0; i < array_length; i++)
+    {
+        fmt::print(fg(fmt::color::blue), "{} ", array[i]);
+    }
+}
+
+void print_array(const double *const array, size_t array_length)
+{
+    for (size_t i = 0; i < array_length; i++)
+    {
+        fmt::print(fg(fmt::color::blue), "{:.4} ", array[i]);
+    }
+}
+
 // Gets paths to files in the given directory.
 std::vector<fs::path> get_file_paths_in_directory(const fs::path &directory_path)
 {

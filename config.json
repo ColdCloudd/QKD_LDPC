@@ -3,14 +3,14 @@
     "trials_number": 100,
     "use_config_simulation_seed": false,
     "simulation_seed": 666,
-    "interactive_mode": false,
+    "interactive_mode": true,
     "sum_product_max_iterations": 100,
     "use_dense_matrices": false,
     "trace_qkd_ldpc": false,
     "trace_sum_product": false,
     "trace_sum_product_llr": false,
     "enable_sum_product_msg_llr_threshold": true,
-    "sum_product_msg_llr_threshold": 100,
+    "sum_product_msg_llr_threshold": 100.0,
     "code_rate_QBER_parameters": 
     [
         {

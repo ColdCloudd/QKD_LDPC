@@ -54,20 +54,20 @@ add_executable(QKD_LDPC
 target_include_directories(QKD_LDPC PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(QKD_LDPC BS_thread_pool fmt indicators nlohmann_json)
 
-# option(BUILD_EXAMPLES "Build examples" OFF)
+option(BUILD_EXAMPLES "Build examples" ON)
 
-# if(BUILD_EXAMPLES)
-#     add_executable(QKD_Winnow_Example 
-#     example/winnow_example.cpp
-#     src/config.hpp
-#     src/config.cpp
-#     src/utils.hpp
-#     src/utils.cpp
-#     src/bit_array_operations.hpp
-#     src/bit_array_operations.cpp
-#     src/winnow_algorithm.hpp
-#     src/winnow_algorithm.cpp
-#     )
-#     target_include_directories(QKD_Winnow_Example PRIVATE ${CMAKE_SOURCE_DIR}/src)
-#     target_link_libraries(QKD_Winnow_Example fmt nlohmann_json)
-# endif()
+if(BUILD_EXAMPLES)
+    add_executable(QKD_LDPC_Example 
+    example/qkd_ldpc_example.cpp
+    src/config.hpp
+    src/config.cpp
+    src/utils.hpp
+    src/utils.cpp
+    src/array_and_matrix_operations.hpp
+    src/array_and_matrix_operations.cpp
+    src/qkd_ldpc_algorithm.hpp
+    src/qkd_ldpc_algorithm.cpp
+    )
+    target_include_directories(QKD_LDPC_Example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(QKD_LDPC_Example fmt nlohmann_json)
+endif()
