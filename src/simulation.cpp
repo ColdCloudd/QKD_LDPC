@@ -5,6 +5,10 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
 {
     try
     {
+        if (!fs::exists(directory))
+        {
+            fs::create_directories(directory);
+        }
         std::string filename = "ldpc(trial_num=" + std::to_string(CFG.TRIALS_NUMBER) + ",max_sum_prod_iters=" +
                                std::to_string(CFG.SUM_PRODUCT_MAX_ITERATIONS) + ",seed=" + std::to_string(CFG.SIMULATION_SEED) + ").csv";
         fs::path result_file_path = directory / filename;

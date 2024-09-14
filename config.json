@@ -3,7 +3,7 @@
     "trials_number": 100,
     "use_config_simulation_seed": false,
     "simulation_seed": 666,
-    "interactive_mode": true,
+    "interactive_mode": false,
     "sum_product_max_iterations": 100,
     "use_dense_matrices": false,
     "trace_qkd_ldpc": false,
