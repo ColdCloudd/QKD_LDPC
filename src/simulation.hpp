@@ -32,7 +32,9 @@ struct sim_result
     std::string matrix_filename{};
     double code_rate{};
     double actual_QBER{};                       // An accurate QBER that corresponds to the number of errors in the key.
-    size_t max_iterations_successful_sp{};      // The maximum number of iterations of the sum-product algorithm in which Alice's syndrome matched Bob's syndrome.
+    size_t max_iterations_successful_sp{};      // The maximum number of iterations of the sum-product algorithm in which Alice's syndrome matched Bob's syndrome (i.e. successful).
+    double mean_iterations_successful_sp{};     // The mean number of iterations of the sum-product algorithm. 
+    double std_dev_iterations_successful_sp{};  // The standard deviation of iterations of the sum-product algorithm. 
     double ratio_trials_successful_sp{};        // Success rate of the sum-product algorithm. Success when Bob's syndrome matches Alice's.
     double ratio_trials_successful_ldpc{};      // Success rate of the QKD LDPC error reconciliation. Success when Bob and Alice's keys match.
 };

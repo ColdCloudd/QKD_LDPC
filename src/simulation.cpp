@@ -15,11 +15,12 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
 
         std::fstream fout;
         fout.open(result_file_path, std::ios::out | std::ios::trunc);
-        fout << "№;MATRIX_FILENAME;CODE_RATE;QBER;MAX_ITERATIONS_SUCCESSFUL_SUM_PRODUCT;RATIO_TRIALS_SUCCESSFUL_SUM_PRODUCT;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
+        fout << "№;MATRIX_FILENAME;CODE_RATE;QBER;MAX_ITERATIONS_SUCCESSFUL_SP;MEAN_ITERATIONS_SUCCESSFUL_SP;STD_DEV_ITERATIONS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
         for (size_t i = 0; i < data.size(); i++)
         {
             fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << data[i].code_rate << ";" << data[i].actual_QBER
-                 << ";" << data[i].max_iterations_successful_sp << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
+                 << ";" << data[i].max_iterations_successful_sp << ";" << data[i].mean_iterations_successful_sp << ";" << data[i].std_dev_iterations_successful_sp
+                 << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
         }
         fout.close();
     }
@@ -233,7 +234,9 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
             size_t trials_successful_sp = 0;
             size_t trials_successful_ldpc = 0;
             size_t max_iterations_successful_sp = 0;
-            size_t curr_sp_iterations_num{};
+            double mean_iterations_successful_sp = 0;
+            double std_dev_iterations_successful_sp = 0;   //standard deviation
+            size_t curr_sp_iterations_num = 0;
             for (size_t k = 0; k < trial_results.size(); k++)
             {
                 if (trial_results[k].ldpc_res.sp_res.syndromes_match)
@@ -248,7 +251,24 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
                     {
                         trials_successful_ldpc++;
                     }
+
+                    mean_iterations_successful_sp += static_cast<double>(curr_sp_iterations_num);
                 }
+            }
+
+            if (trials_successful_sp > 0)
+            {
+                mean_iterations_successful_sp /= static_cast<double>(trials_successful_sp);
+                for (size_t k = 0; k < trial_results.size(); k++)
+                {
+                    if (trial_results[k].ldpc_res.sp_res.syndromes_match)
+                    {
+                        curr_sp_iterations_num = trial_results[k].ldpc_res.sp_res.iterations_num;
+                        std_dev_iterations_successful_sp += pow((static_cast<double>(curr_sp_iterations_num) - mean_iterations_successful_sp), 2);
+                    }
+                }
+                std_dev_iterations_successful_sp /= static_cast<double>(trials_successful_sp);
+                std_dev_iterations_successful_sp = sqrt(std_dev_iterations_successful_sp);
             }
 
             sim_results[curr_sim].code_rate = code_rate;
@@ -257,6 +277,9 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
 
             sim_results[curr_sim].actual_QBER = trial_results[0].actual_QBER;
             sim_results[curr_sim].max_iterations_successful_sp = max_iterations_successful_sp;
+            sim_results[curr_sim].mean_iterations_successful_sp = mean_iterations_successful_sp;
+            sim_results[curr_sim].std_dev_iterations_successful_sp = std_dev_iterations_successful_sp;
+
             sim_results[curr_sim].ratio_trials_successful_ldpc = static_cast<double>(trials_successful_ldpc) / CFG.TRIALS_NUMBER;
             sim_results[curr_sim].ratio_trials_successful_sp = static_cast<double>(trials_successful_sp) / CFG.TRIALS_NUMBER;
             curr_sim++;
