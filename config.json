@@ -12,11 +12,17 @@
     "enable_sum_product_msg_llr_threshold": true,
     "sum_product_msg_llr_threshold": 100.0,
     "code_rate_QBER_parameters": 
-    [
+    [ 
+        {
+            "code_rate": 0.1,
+            "QBER_begin": 0.01,
+            "QBER_end": 0.25,
+            "QBER_step": 0.01
+        },
         {
             "code_rate": 0.25,
             "QBER_begin": 0.01,
-            "QBER_end": 0.04,
+            "QBER_end": 0.19,
             "QBER_step": 0.01
         },
         {
@@ -28,13 +34,7 @@
         {
             "code_rate": 0.75,
             "QBER_begin": 0.01,
-            "QBER_end": 0.19,
-            "QBER_step": 0.01
-        },
-        {
-            "code_rate": 0.9,
-            "QBER_begin": 0.01,
-            "QBER_end": 0.25,
+            "QBER_end": 0.04,
             "QBER_step": 0.01
         }
     ]

@@ -138,7 +138,7 @@ void prepare_sim_inputs(const std::vector<fs::path> &matrix_paths, std::vector<s
         sim_inputs_out[i].sim_number = i;
         sim_inputs_out[i].matrix_path = matrix_paths[i];
 
-        double code_rate = static_cast<double>(sim_inputs_out[i].matrix.num_check_nodes) / sim_inputs_out[i].matrix.num_bit_nodes;
+        double code_rate = 1. - (static_cast<double>(sim_inputs_out[i].matrix.num_check_nodes) / sim_inputs_out[i].matrix.num_bit_nodes);
         sim_inputs_out[i].QBER = get_rate_based_QBER_range(code_rate, CFG.R_QBER_PARAMETERS);
     }
 }
@@ -212,7 +212,7 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
     for (size_t i = 0; i < sim_in.size(); i++)
     {
         const H_matrix &matrix = sim_in[i].matrix;
-        double code_rate = static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes;
+        double code_rate = 1. - (static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes);
         std::string matrix_filename = sim_in[i].matrix_path.filename().string();
         for (size_t j = 0; j < sim_in[i].QBER.size(); j++)
         {
