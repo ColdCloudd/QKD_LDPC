@@ -235,7 +235,7 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
             size_t trials_successful_sp = 0;
             size_t trials_successful_ldpc = 0;
             size_t iterations_successful_sp_max = 0;
-            size_t iterations_successful_sp_min = 0;
+            size_t iterations_successful_sp_min = CFG.SUM_PRODUCT_MAX_ITERATIONS;
             double iterations_successful_sp_mean = 0;
             double iterations_successful_sp_std_dev = 0;   //standard deviation
             size_t curr_sp_iterations_num = 0;
@@ -283,7 +283,7 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
 
             sim_results[curr_sim].actual_QBER = trial_results[0].actual_QBER;
             sim_results[curr_sim].iterations_successful_sp_max = iterations_successful_sp_max;
-            sim_results[curr_sim].iterations_successful_sp_min = iterations_successful_sp_min;
+            sim_results[curr_sim].iterations_successful_sp_min = (iterations_successful_sp_min == CFG.SUM_PRODUCT_MAX_ITERATIONS) ? 0. : iterations_successful_sp_min;
             sim_results[curr_sim].iterations_successful_sp_mean = iterations_successful_sp_mean;
             sim_results[curr_sim].iterations_successful_sp_std_dev = iterations_successful_sp_std_dev;
 
