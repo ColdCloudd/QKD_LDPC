@@ -34,7 +34,7 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
 
 // Get QBER range based on code rate of matrix. R_QBER_parameters must be sorted. Looks for the first set of parameters
 // where the code rate is less than or equal to the specified rate, and uses these parameters to generate a range of QBER values.
-std::vector<double> get_rate_based_QBER_range(double code_rate, const std::vector<R_QBER_params> &R_QBER_parameters)
+std::vector<double> get_rate_based_QBER_range(const double code_rate, const std::vector<R_QBER_params> &R_QBER_parameters)
 {
     std::vector<double> QBER;
     for (size_t i = 0; i < R_QBER_parameters.size(); i++)
@@ -146,7 +146,7 @@ void prepare_sim_inputs(const std::vector<fs::path> &matrix_paths, std::vector<s
 }
 
 // Runs a single QKD LDPC trial.
-trial_result run_trial(const H_matrix &matrix, double QBER, size_t seed)
+trial_result run_trial(const H_matrix &matrix, const double QBER, size_t seed)
 {
     std::mt19937 prng(seed);
 
