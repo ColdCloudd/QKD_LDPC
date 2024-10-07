@@ -15,12 +15,13 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
 
         std::fstream fout;
         fout.open(result_file_path, std::ios::out | std::ios::trunc);
-        fout << "№;MATRIX_FILENAME;CODE_RATE;QBER;MAX_ITERATIONS_SUCCESSFUL_SP;MEAN_ITERATIONS_SUCCESSFUL_SP;STD_DEV_ITERATIONS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
+        fout << "№;MATRIX_FILENAME;CODE_RATE;QBER;ITERATIONS_SUCCESSFUL_SP_MEAN;ITERATIONS_SUCCESSFUL_SP_STD_DEV;ITERATIONS_SUCCESSFUL_SP_MIN;ITERATIONS_SUCCESSFUL_SP_MAX;" << 
+        "RATIO_TRIALS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
         for (size_t i = 0; i < data.size(); i++)
         {
             fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << data[i].code_rate << ";" << data[i].actual_QBER
-                 << ";" << data[i].max_iterations_successful_sp << ";" << data[i].mean_iterations_successful_sp << ";" << data[i].std_dev_iterations_successful_sp
-                 << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
+                 << ";" << data[i].iterations_successful_sp_mean << ";" << data[i].iterations_successful_sp_std_dev << ";" << data[i].iterations_successful_sp_min << ";"
+                 << data[i].iterations_successful_sp_max << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
         }
         fout.close();
     }
@@ -233,9 +234,10 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
 
             size_t trials_successful_sp = 0;
             size_t trials_successful_ldpc = 0;
-            size_t max_iterations_successful_sp = 0;
-            double mean_iterations_successful_sp = 0;
-            double std_dev_iterations_successful_sp = 0;   //standard deviation
+            size_t iterations_successful_sp_max = 0;
+            size_t iterations_successful_sp_min = 0;
+            double iterations_successful_sp_mean = 0;
+            double iterations_successful_sp_std_dev = 0;   //standard deviation
             size_t curr_sp_iterations_num = 0;
             for (size_t k = 0; k < trial_results.size(); k++)
             {
@@ -243,32 +245,36 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
                 {
                     trials_successful_sp++;
                     curr_sp_iterations_num = trial_results[k].ldpc_res.sp_res.iterations_num;
-                    if (max_iterations_successful_sp < curr_sp_iterations_num)
+                    if (iterations_successful_sp_max < curr_sp_iterations_num)
                     {
-                        max_iterations_successful_sp = curr_sp_iterations_num;
+                        iterations_successful_sp_max = curr_sp_iterations_num;
+                    }
+                    if (iterations_successful_sp_min > curr_sp_iterations_num)
+                    {
+                        iterations_successful_sp_min = curr_sp_iterations_num;
                     }
                     if (trial_results[k].ldpc_res.keys_match)
                     {
                         trials_successful_ldpc++;
                     }
 
-                    mean_iterations_successful_sp += static_cast<double>(curr_sp_iterations_num);
+                    iterations_successful_sp_mean += static_cast<double>(curr_sp_iterations_num);
                 }
             }
 
             if (trials_successful_sp > 0)
             {
-                mean_iterations_successful_sp /= static_cast<double>(trials_successful_sp);
+                iterations_successful_sp_mean /= static_cast<double>(trials_successful_sp);
                 for (size_t k = 0; k < trial_results.size(); k++)
                 {
                     if (trial_results[k].ldpc_res.sp_res.syndromes_match)
                     {
                         curr_sp_iterations_num = trial_results[k].ldpc_res.sp_res.iterations_num;
-                        std_dev_iterations_successful_sp += pow((static_cast<double>(curr_sp_iterations_num) - mean_iterations_successful_sp), 2);
+                        iterations_successful_sp_std_dev += pow((static_cast<double>(curr_sp_iterations_num) - iterations_successful_sp_mean), 2);
                     }
                 }
-                std_dev_iterations_successful_sp /= static_cast<double>(trials_successful_sp);
-                std_dev_iterations_successful_sp = sqrt(std_dev_iterations_successful_sp);
+                iterations_successful_sp_std_dev /= static_cast<double>(trials_successful_sp);
+                iterations_successful_sp_std_dev = sqrt(iterations_successful_sp_std_dev);
             }
 
             sim_results[curr_sim].code_rate = code_rate;
@@ -276,9 +282,10 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
             sim_results[curr_sim].matrix_filename = matrix_filename;
 
             sim_results[curr_sim].actual_QBER = trial_results[0].actual_QBER;
-            sim_results[curr_sim].max_iterations_successful_sp = max_iterations_successful_sp;
-            sim_results[curr_sim].mean_iterations_successful_sp = mean_iterations_successful_sp;
-            sim_results[curr_sim].std_dev_iterations_successful_sp = std_dev_iterations_successful_sp;
+            sim_results[curr_sim].iterations_successful_sp_max = iterations_successful_sp_max;
+            sim_results[curr_sim].iterations_successful_sp_min = iterations_successful_sp_min;
+            sim_results[curr_sim].iterations_successful_sp_mean = iterations_successful_sp_mean;
+            sim_results[curr_sim].iterations_successful_sp_std_dev = iterations_successful_sp_std_dev;
 
             sim_results[curr_sim].ratio_trials_successful_ldpc = static_cast<double>(trials_successful_ldpc) / CFG.TRIALS_NUMBER;
             sim_results[curr_sim].ratio_trials_successful_sp = static_cast<double>(trials_successful_sp) / CFG.TRIALS_NUMBER;
