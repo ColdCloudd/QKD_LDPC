@@ -15,12 +15,14 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
 
         std::fstream fout;
         fout.open(result_file_path, std::ios::out | std::ios::trunc);
-        fout << "№;MATRIX_FILENAME;CODE_RATE;QBER;ITERATIONS_SUCCESSFUL_SP_MEAN;ITERATIONS_SUCCESSFUL_SP_STD_DEV;ITERATIONS_SUCCESSFUL_SP_MIN;ITERATIONS_SUCCESSFUL_SP_MAX;" << 
+        fout << "№;MATRIX_FILENAME;TYPE;CODE_RATE;M;N;QBER;ITERATIONS_SUCCESSFUL_SP_MEAN;ITERATIONS_SUCCESSFUL_SP_STD_DEV;ITERATIONS_SUCCESSFUL_SP_MIN;ITERATIONS_SUCCESSFUL_SP_MAX;" << 
         "RATIO_TRIALS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
         for (size_t i = 0; i < data.size(); i++)
         {
-            fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << data[i].code_rate << ";" << data[i].actual_QBER
-                 << ";" << data[i].iterations_successful_sp_mean << ";" << data[i].iterations_successful_sp_std_dev << ";" << data[i].iterations_successful_sp_min << ";"
+            fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << (data[i].is_regular ? "regular" : "irregular") << ";" 
+                 << 1. - (static_cast<double>(data[i].num_check_nodes) / data[i].num_bit_nodes) << ";" << data[i].num_check_nodes << ";" 
+                 << data[i].num_bit_nodes << ";" << data[i].actual_QBER << ";" << data[i].iterations_successful_sp_mean << ";" 
+                 << data[i].iterations_successful_sp_std_dev << ";" << data[i].iterations_successful_sp_min << ";" 
                  << data[i].iterations_successful_sp_max << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
         }
         fout.close();
@@ -137,7 +139,6 @@ void prepare_sim_inputs(const std::vector<fs::path> &matrix_paths, std::vector<s
             read_sparse_alist_matrix(matrix_paths[i], sim_inputs_out[i].matrix);
         }
 
-        sim_inputs_out[i].sim_number = i;
         sim_inputs_out[i].matrix_path = matrix_paths[i];
 
         double code_rate = 1. - (static_cast<double>(sim_inputs_out[i].matrix.num_check_nodes) / sim_inputs_out[i].matrix.num_bit_nodes);
@@ -277,9 +278,12 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
                 iterations_successful_sp_std_dev = sqrt(iterations_successful_sp_std_dev);
             }
 
-            sim_results[curr_sim].code_rate = code_rate;
-            sim_results[curr_sim].sim_number = sim_in[i].sim_number;
+            sim_results[curr_sim].sim_number = curr_sim;
+
             sim_results[curr_sim].matrix_filename = matrix_filename;
+            sim_results[curr_sim].is_regular = matrix.is_regular;
+            sim_results[curr_sim].num_bit_nodes = matrix.num_bit_nodes;
+            sim_results[curr_sim].num_check_nodes = matrix.num_check_nodes;
 
             sim_results[curr_sim].actual_QBER = trial_results[0].actual_QBER;
             sim_results[curr_sim].iterations_successful_sp_max = iterations_successful_sp_max;

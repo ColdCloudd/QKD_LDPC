@@ -14,7 +14,6 @@
 
 struct sim_input
 {
-    size_t sim_number{};
     fs::path matrix_path{};
     std::vector<double> QBER{};
     H_matrix matrix{};
@@ -30,7 +29,9 @@ struct sim_result
 {
     size_t sim_number{};
     std::string matrix_filename{};
-    double code_rate{};
+    bool is_regular{};                          // Matrix type.
+    size_t num_bit_nodes{};                     // Number of bit nodes, which is defined as the number of columns in the parity check matrix.
+    size_t num_check_nodes{};                   // Number of check nodes, which is defined as the number of rows in the parity check matrix.
     double actual_QBER{};                       // An accurate QBER that corresponds to the number of errors in the key.
     size_t iterations_successful_sp_max{};      // The maximum number of iterations of the sum-product algorithm in which Alice's syndrome matched Bob's syndrome (i.e. successful).
     size_t iterations_successful_sp_min{};      // The minimum number of iterations of the sum-product algorithm.

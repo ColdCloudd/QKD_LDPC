@@ -22,7 +22,7 @@ struct H_matrix
     size_t num_check_nodes{};           // Number of check nodes, which is defined as the number of rows in the parity check matrix.
     size_t max_bit_nodes_weight{};      // Used for regular matrices. All bit nodes have the same number of check nodes.
     size_t max_check_nodes_weight{};    // Used for regular matrices. All check nodes have the same number of bit nodes.
-    bool is_regular{};                  
+    bool is_regular{};                  // Matrix type.
 };
 
 void get_bit_nodes(const std::vector<std::vector<int>> &matrix, const int *const bit_nodes_weight, int **&bit_nodes_out);
