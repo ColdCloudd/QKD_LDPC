@@ -21,7 +21,7 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
         {
             fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << (data[i].is_regular ? "regular" : "irregular") << ";" 
                  << 1. - (static_cast<double>(data[i].num_check_nodes) / data[i].num_bit_nodes) << ";" << data[i].num_check_nodes << ";" 
-                 << data[i].num_bit_nodes << ";" << data[i].actual_QBER << ";" << data[i].iterations_successful_sp_mean << ";" 
+                 << data[i].num_bit_nodes << ";" << data[i].initial_QBER << ";" << data[i].iterations_successful_sp_mean << ";" 
                  << data[i].iterations_successful_sp_std_dev << ";" << data[i].iterations_successful_sp_min << ";" 
                  << data[i].iterations_successful_sp_max << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
         }
@@ -89,10 +89,10 @@ void QKD_LDPC_interactive_simulation(fs::path matrix_dir_path)
         fmt::print(fg(fmt::color::green), "№:{}\n", i + 1);
 
         generate_random_bit_array(prng, num_bit_nodes, alice_bit_array);
-        double actual_QBER = introduce_errors(prng, alice_bit_array, num_bit_nodes, QBER[i], bob_bit_array);
-        fmt::print(fg(fmt::color::green), "Actual QBER: {}\n", actual_QBER);
+        double initial_QBER = introduce_errors(prng, alice_bit_array, num_bit_nodes, QBER[i], bob_bit_array);
+        fmt::print(fg(fmt::color::green), "Actual QBER: {}\n", initial_QBER);
 
-        if (actual_QBER == 0.)
+        if (initial_QBER == 0.)
         {
             free_matrix_H(matrix);
             delete[] alice_bit_array;
@@ -110,11 +110,11 @@ void QKD_LDPC_interactive_simulation(fs::path matrix_dir_path)
         LDPC_result try_result;
         if (matrix.is_regular)
         {
-            try_result = QKD_LDPC_regular(alice_bit_array, bob_bit_array, actual_QBER, matrix);
+            try_result = QKD_LDPC_regular(alice_bit_array, bob_bit_array, initial_QBER, matrix);
         }
         else
         {
-            try_result = QKD_LDPC_irregular(alice_bit_array, bob_bit_array, actual_QBER, matrix);
+            try_result = QKD_LDPC_irregular(alice_bit_array, bob_bit_array, initial_QBER, matrix);
         }
         fmt::print(fg(fmt::color::green), "Iterations performed: {}\n", try_result.sp_res.iterations_num);
         fmt::print(fg(fmt::color::green), "{}\n\n", ((try_result.keys_match && try_result.sp_res.syndromes_match) ? "Error reconciliation SUCCESSFUL" : "Error reconciliation FAILED"));
@@ -155,8 +155,8 @@ trial_result run_trial(const H_matrix &matrix, const double QBER, size_t seed)
     int *alice_bit_array = new int[matrix.num_bit_nodes];
     int *bob_bit_array = new int[matrix.num_bit_nodes];
     generate_random_bit_array(prng, matrix.num_bit_nodes, alice_bit_array);
-    result.actual_QBER = introduce_errors(prng, alice_bit_array, matrix.num_bit_nodes, QBER, bob_bit_array);
-    if (result.actual_QBER == 0.)
+    result.initial_QBER = introduce_errors(prng, alice_bit_array, matrix.num_bit_nodes, QBER, bob_bit_array);
+    if (result.initial_QBER == 0.)
     {
         delete[] alice_bit_array;
         delete[] bob_bit_array;
@@ -165,11 +165,11 @@ trial_result run_trial(const H_matrix &matrix, const double QBER, size_t seed)
 
     if (matrix.is_regular)
     {
-        result.ldpc_res = QKD_LDPC_regular(alice_bit_array, bob_bit_array, result.actual_QBER, matrix);
+        result.ldpc_res = QKD_LDPC_regular(alice_bit_array, bob_bit_array, result.initial_QBER, matrix);
     }
     else
     {
-        result.ldpc_res = QKD_LDPC_irregular(alice_bit_array, bob_bit_array, result.actual_QBER, matrix);
+        result.ldpc_res = QKD_LDPC_irregular(alice_bit_array, bob_bit_array, result.initial_QBER, matrix);
     }
     delete[] alice_bit_array;
     delete[] bob_bit_array;
@@ -285,7 +285,7 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
             sim_results[curr_sim].num_bit_nodes = matrix.num_bit_nodes;
             sim_results[curr_sim].num_check_nodes = matrix.num_check_nodes;
 
-            sim_results[curr_sim].actual_QBER = trial_results[0].actual_QBER;
+            sim_results[curr_sim].initial_QBER = trial_results[0].initial_QBER;
             sim_results[curr_sim].iterations_successful_sp_max = iterations_successful_sp_max;
             sim_results[curr_sim].iterations_successful_sp_min = (iterations_successful_sp_min == CFG.SUM_PRODUCT_MAX_ITERATIONS) ? 0. : iterations_successful_sp_min;
             sim_results[curr_sim].iterations_successful_sp_mean = iterations_successful_sp_mean;
