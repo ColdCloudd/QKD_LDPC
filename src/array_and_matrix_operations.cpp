@@ -421,7 +421,7 @@ void read_dense_matrix(const fs::path &matrix_path, H_matrix &matrix_out)
 }
 
 // Generates Alice's key.
-void generate_random_bit_array(std::mt19937 &prng, size_t length, int *const random_bit_array_out)
+void generate_random_bit_array(XoshiroCpp::Xoshiro256PlusPlus &prng, size_t length, int *const random_bit_array_out)
 {
     std::uniform_int_distribution<int> distribution(0, 1);
     for (int i = 0; i < length; ++i)
@@ -431,7 +431,7 @@ void generate_random_bit_array(std::mt19937 &prng, size_t length, int *const ran
 }
 
 // Generates Bob's key by making errors in Alice's key. Generates the exact number of errors in the key and returns the exact QBER.
-double introduce_errors(std::mt19937 &prng, const int *const bit_array, size_t array_length, double error_probability, int *const bit_array_with_errors_out)
+double introduce_errors(XoshiroCpp::Xoshiro256PlusPlus &prng, const int *const bit_array, size_t array_length, double error_probability, int *const bit_array_with_errors_out)
 {
     size_t num_errors = static_cast<size_t>(array_length * error_probability);
     if (num_errors == 0)
@@ -446,7 +446,7 @@ double introduce_errors(std::mt19937 &prng, const int *const bit_array, size_t a
             error_positions[i] = i;
         }
 
-        shuffle(error_positions, error_positions + array_length, prng);
+        std::shuffle(error_positions, error_positions + array_length, prng);
         std::copy(bit_array, bit_array + array_length, bit_array_with_errors_out);
 
         for (size_t i = 0; i < num_errors; ++i)

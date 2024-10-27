@@ -5,6 +5,7 @@
 #include <fmt/core.h>
 #include <fmt/color.h>
 #include <fmt/ranges.h>
+#include <XoshiroCpp.hpp>
 #include <BS_thread_pool.hpp>
 #include <indicators/progress_bar.hpp>
 #include <indicators/cursor_control.hpp>

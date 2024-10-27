@@ -81,7 +81,7 @@ void QKD_LDPC_interactive_simulation(fs::path matrix_dir_path)
     int *alice_bit_array = new int[num_bit_nodes];
     int *bob_bit_array = new int[num_bit_nodes];
 
-    std::mt19937 prng(CFG.SIMULATION_SEED); 
+    XoshiroCpp::Xoshiro256PlusPlus prng(CFG.SIMULATION_SEED); 
     double code_rate = static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes;
     std::vector<double> QBER = get_rate_based_QBER_range(code_rate, CFG.R_QBER_PARAMETERS);
     for (size_t i = 0; i < QBER.size(); i++)
@@ -149,7 +149,7 @@ void prepare_sim_inputs(const std::vector<fs::path> &matrix_paths, std::vector<s
 // Runs a single QKD LDPC trial.
 trial_result run_trial(const H_matrix &matrix, const double QBER, size_t seed)
 {
-    std::mt19937 prng(seed);
+    XoshiroCpp::Xoshiro256PlusPlus prng(seed);
 
     trial_result result;
     int *alice_bit_array = new int[matrix.num_bit_nodes];
@@ -208,7 +208,7 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
     std::vector<sim_result> sim_results(sim_total);
     std::vector<trial_result> trial_results(CFG.TRIALS_NUMBER);
 
-    std::mt19937 prng(CFG.SIMULATION_SEED);
+    XoshiroCpp::Xoshiro256PlusPlus prng(CFG.SIMULATION_SEED);
     std::uniform_int_distribution<size_t> distribution(0, std::numeric_limits<size_t>::max());
 
     BS::thread_pool pool(CFG.THREADS_NUMBER);

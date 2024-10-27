@@ -31,6 +31,12 @@ CPMAddPackage(
     VERSION 2.3)
 
 CPMAddPackage(
+    NAME xoshiro_cpp
+    GITHUB_REPOSITORY Reputeless/Xoshiro-cpp
+    VERSION 1.1)
+include_directories(${xoshiro_cpp_SOURCE_DIR})
+
+CPMAddPackage(
     NAME nlohmann_json
     VERSION 3.11.3
     GITHUB_REPOSITORY nlohmann/json

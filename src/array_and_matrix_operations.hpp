@@ -9,6 +9,7 @@
 #include <fmt/core.h>
 #include <fmt/color.h>
 #include <fmt/ranges.h>
+#include <XoshiroCpp.hpp>
 
 namespace fs = std::filesystem;
 
@@ -33,8 +34,8 @@ void free_matrix_H(H_matrix &matrix);
 bool arrays_equal(const int *const array1, const int *const array2, const size_t &array_length);
 void read_sparse_alist_matrix(const fs::path &matrix_path, H_matrix &matrix_out);
 void read_dense_matrix(const fs::path &matrix_path, H_matrix &matrix_out);
-void generate_random_bit_array(std::mt19937 &prng, size_t length, int *const random_bit_array_out);
-double introduce_errors(std::mt19937 &prng, const int *const bit_array, size_t array_length, double error_probability, int *const bit_array_with_errors_out);
+void generate_random_bit_array(XoshiroCpp::Xoshiro256PlusPlus &prng, size_t length, int *const random_bit_array_out);
+double introduce_errors(XoshiroCpp::Xoshiro256PlusPlus &prng, const int *const bit_array, size_t array_length, double error_probability, int *const bit_array_with_errors_out);
 void calculate_syndrome_regular(const int *const bit_array, const H_matrix &matrix, int *const syndrome_out);
 void calculate_syndrome_irregular(const int *const bit_array, const H_matrix &matrix, int *const syndrome_out);
 void threshold_matrix_regular(double *const *matrix, const size_t &rows_number, const size_t &nodes_weight, const double &msg_threshold);
