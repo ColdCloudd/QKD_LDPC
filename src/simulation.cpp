@@ -9,9 +9,17 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
         {
             fs::create_directories(directory);
         }
-        std::string filename = "ldpc(trial_num=" + std::to_string(CFG.TRIALS_NUMBER) + ",max_sum_prod_iters=" +
-                               std::to_string(CFG.SUM_PRODUCT_MAX_ITERATIONS) + ",seed=" + std::to_string(CFG.SIMULATION_SEED) + ").csv";
-        fs::path result_file_path = directory / filename;
+        std::string base_filename  = "ldpc(trial_num=" + std::to_string(CFG.TRIALS_NUMBER) + ",max_sum_prod_iters=" +
+                               std::to_string(CFG.SUM_PRODUCT_MAX_ITERATIONS) + ",seed=" + std::to_string(CFG.SIMULATION_SEED) + ")";
+        std::string extension = ".csv";
+        fs::path result_file_path = directory / (base_filename + extension);
+
+        int file_count = 1;
+        while (fs::exists(result_file_path))
+        {
+            result_file_path = directory / (base_filename + "_" + std::to_string(file_count) + extension);
+            file_count++;
+        }
 
         std::fstream fout;
         fout.open(result_file_path, std::ios::out | std::ios::trunc);

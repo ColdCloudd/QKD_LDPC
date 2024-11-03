@@ -1,8 +1,8 @@
 {
     "threads_number": 16,
-    "trials_number": 100,
-    "use_config_simulation_seed": false,
-    "simulation_seed": 666,
+    "trials_number": 1000,
+    "use_config_simulation_seed": true,
+    "simulation_seed": 1112024,
     "interactive_mode": false,
     "sum_product_max_iterations": 100,
     "use_dense_matrices": false,
@@ -15,27 +15,39 @@
     [ 
         {
             "code_rate": 0.1,
-            "QBER_begin": 0.01,
-            "QBER_end": 0.25,
-            "QBER_step": 0.01
+            "QBER_begin": 0.105,
+            "QBER_end": 0.195,
+            "QBER_step": 0.005
         },
         {
             "code_rate": 0.25,
-            "QBER_begin": 0.01,
-            "QBER_end": 0.19,
-            "QBER_step": 0.01
+            "QBER_begin": 0.005,
+            "QBER_end": 0.155,
+            "QBER_step": 0.005
         },
         {
             "code_rate": 0.5,
-            "QBER_begin": 0.01,
-            "QBER_end": 0.1,
-            "QBER_step": 0.01
+            "QBER_begin": 0.005,
+            "QBER_end": 0.125,
+            "QBER_step": 0.005
+        },
+        {
+            "code_rate": 0.6,
+            "QBER_begin": 0.005,
+            "QBER_end": 0.105,
+            "QBER_step": 0.005
         },
         {
             "code_rate": 0.75,
-            "QBER_begin": 0.01,
+            "QBER_begin": 0.005,
+            "QBER_end": 0.075,
+            "QBER_step": 0.005
+        },
+        {
+            "code_rate": 0.95,
+            "QBER_begin": 0.005,
             "QBER_end": 0.04,
-            "QBER_step": 0.01
+            "QBER_step": 0.005
         }
     ]
 }
