@@ -14,7 +14,7 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
         std::string extension = ".csv";
         fs::path result_file_path = directory / (base_filename + extension);
 
-        int file_count = 1;
+        size_t file_count = 1;
         while (fs::exists(result_file_path))
         {
             result_file_path = directory / (base_filename + "_" + std::to_string(file_count) + extension);
