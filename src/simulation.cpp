@@ -49,11 +49,13 @@ std::vector<double> get_rate_based_QBER_range(const double code_rate, const std:
     std::vector<double> QBER;
     for (size_t i = 0; i < R_QBER_parameters.size(); i++)
     {
-        if (code_rate <= R_QBER_parameters[i].code_rate || i == R_QBER_parameters.size() - 1)
+        if (code_rate <= R_QBER_parameters[i].code_rate)
         {
-            for (double value = R_QBER_parameters[i].QBER_begin; value <= R_QBER_parameters[i].QBER_end;
-                 value += R_QBER_parameters[i].QBER_step)
+            size_t steps = round((R_QBER_parameters[i].QBER_end - R_QBER_parameters[i].QBER_begin) / R_QBER_parameters[i].QBER_step);
+            double value {};
+            for (size_t j = 0; j < steps; j++) 
             {
+                value = R_QBER_parameters[i].QBER_begin + j * R_QBER_parameters[i].QBER_step;
                 QBER.push_back(value);
             }
             break;

@@ -89,7 +89,12 @@ config_data get_config_data(fs::path config_path)
             {
                 throw std::runtime_error("Invalid QBER begin or end parameters. QBER must be: 0 < QBER < 1, and begin must be less than end.");
             }
-            if (cfg.R_QBER_PARAMETERS[i].QBER_step > cfg.R_QBER_PARAMETERS[i].QBER_end - cfg.R_QBER_PARAMETERS[i].QBER_begin)
+            if (cfg.R_QBER_PARAMETERS[i].QBER_step <= 0.)
+            {
+                throw std::runtime_error("QBER step must be > 0!");
+            }
+            const double epsilon = 1e-6;
+            if (cfg.R_QBER_PARAMETERS[i].QBER_step - epsilon > cfg.R_QBER_PARAMETERS[i].QBER_end - cfg.R_QBER_PARAMETERS[i].QBER_begin)
             {
                 throw std::runtime_error("QBER step is too large.");
             }
