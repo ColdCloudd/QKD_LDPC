@@ -24,14 +24,15 @@ void write_file(const std::vector<sim_result> &data, fs::path directory)
         std::fstream fout;
         fout.open(result_file_path, std::ios::out | std::ios::trunc);
         fout << "№;MATRIX_FILENAME;TYPE;CODE_RATE;M;N;QBER;ITERATIONS_SUCCESSFUL_SP_MEAN;ITERATIONS_SUCCESSFUL_SP_STD_DEV;ITERATIONS_SUCCESSFUL_SP_MIN;ITERATIONS_SUCCESSFUL_SP_MAX;" << 
-        "RATIO_TRIALS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_LDPC\n";
+        "RATIO_TRIALS_SUCCESSFUL_SP;RATIO_TRIALS_SUCCESSFUL_LDPC;FER\n";
         for (size_t i = 0; i < data.size(); i++)
         {
             fout << data[i].sim_number << ";" << data[i].matrix_filename << ";" << (data[i].is_regular ? "regular" : "irregular") << ";" 
                  << 1. - (static_cast<double>(data[i].num_check_nodes) / data[i].num_bit_nodes) << ";" << data[i].num_check_nodes << ";" 
                  << data[i].num_bit_nodes << ";" << data[i].initial_QBER << ";" << data[i].iterations_successful_sp_mean << ";" 
                  << data[i].iterations_successful_sp_std_dev << ";" << data[i].iterations_successful_sp_min << ";" 
-                 << data[i].iterations_successful_sp_max << ";" << data[i].ratio_trials_successful_sp << ";" << data[i].ratio_trials_successful_ldpc << "\n";
+                 << data[i].iterations_successful_sp_max << ";" << data[i].ratio_trials_successful_sp << ";" 
+                 << data[i].ratio_trials_successful_ldpc << ";" << 1. - data[i].ratio_trials_successful_ldpc << "\n";
         }
         fout.close();
     }
@@ -220,6 +221,11 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
 
     XoshiroCpp::Xoshiro256PlusPlus prng(CFG.SIMULATION_SEED);
     std::uniform_int_distribution<size_t> distribution(0, std::numeric_limits<size_t>::max());
+    std::vector<size_t> seeds(CFG.TRIALS_NUMBER);
+    for (size_t i = 0; i < seeds.size(); i++)
+    {
+        seeds[i] = distribution(prng);
+    }
 
     BS::thread_pool pool(CFG.THREADS_NUMBER);
     for (size_t i = 0; i < sim_in.size(); i++)
@@ -236,9 +242,9 @@ std::vector<sim_result> QKD_LDPC_batch_simulation(const std::vector<sim_input> &
             double QBER = sim_in[i].QBER[j];
             // TRIALS_NUMBER of trials are performed with each combination to calculate the mean values
             pool.detach_loop<size_t>(0, CFG.TRIALS_NUMBER,
-                                     [&matrix, &QBER, &trial_results, &prng, &distribution, &bar](size_t k)
+                                     [&matrix, &QBER, &trial_results, &seeds, &curr_sim, &bar](size_t k)
                                      {
-                                         trial_results[k] = run_trial(matrix, QBER, distribution(prng));
+                                         trial_results[k] = run_trial(matrix, QBER, seeds[k] + curr_sim);
                                          bar.tick(); // For correct time estimation
                                      });
             pool.wait();

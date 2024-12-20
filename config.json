@@ -1,8 +1,8 @@
 {
     "threads_number": 16,
-    "trials_number": 1000000,
+    "trials_number": 100,
     "use_config_simulation_seed": true,
-    "simulation_seed": 4112024,
+    "simulation_seed": 777,
     "interactive_mode": false,
     "sum_product_max_iterations": 100,
     "use_dense_matrices": false,
@@ -14,148 +14,16 @@
     "code_rate_QBER_parameters": 
     [
         {
-            "code_rate": 0.36,
-            "QBER_begin": 0.12,
-            "QBER_end": 0.125,
-            "QBER_step": 0.005
+            "code_rate": 0.36, "QBER_begin": 0.12,
+            "QBER_end": 0.135, "QBER_step": 0.0005
         },
         {
-            "code_rate": 0.37,
-            "QBER_begin": 0.115,
-            "QBER_end": 0.12,
-            "QBER_step": 0.005
+            "code_rate": 0.58, "QBER_begin": 0.06,
+            "QBER_end": 0.075, "QBER_step": 0.0005
         },
         {
-            "code_rate": 0.39,
-            "QBER_begin": 0.11,
-            "QBER_end": 0.115,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.41,
-            "QBER_begin": 0.105,
-            "QBER_end": 0.11,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.42,
-            "QBER_begin": 0.1,
-            "QBER_end": 0.105,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.44,
-            "QBER_begin": 0.095,
-            "QBER_end": 0.1,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.46,
-            "QBER_begin": 0.09,
-            "QBER_end": 0.095,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.48,
-            "QBER_begin": 0.085,
-            "QBER_end": 0.09,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.5,
-            "QBER_begin": 0.08,
-            "QBER_end": 0.085,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.52,
-            "QBER_begin": 0.075,
-            "QBER_end": 0.08,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.53,
-            "QBER_begin": 0.07,
-            "QBER_end": 0.075,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.56,
-            "QBER_begin": 0.065,
-            "QBER_end": 0.07,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.58,
-            "QBER_begin": 0.06,
-            "QBER_end": 0.065,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.59,
-            "QBER_begin": 0.055,
-            "QBER_end": 0.06,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.62,
-            "QBER_begin": 0.05,
-            "QBER_end": 0.055,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.64,
-            "QBER_begin": 0.045,
-            "QBER_end": 0.05,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.66,
-            "QBER_begin": 0.04,
-            "QBER_end": 0.045,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.69,
-            "QBER_begin": 0.035,
-            "QBER_end": 0.04,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.73,
-            "QBER_begin": 0.03,
-            "QBER_end": 0.035,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.76,
-            "QBER_begin": 0.025,
-            "QBER_end": 0.03,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.8,
-            "QBER_begin": 0.02,
-            "QBER_end": 0.025,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.86,
-            "QBER_begin": 0.015,
-            "QBER_end": 0.02,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.9,
-            "QBER_begin": 0.01,
-            "QBER_end": 0.015,
-            "QBER_step": 0.005
-        },
-        {
-            "code_rate": 0.95,
-            "QBER_begin": 0.005,
-            "QBER_end": 0.01,
-            "QBER_step": 0.005
+            "code_rate": 0.95, "QBER_begin": 0.005,
+            "QBER_end": 0.05, "QBER_step": 0.0005
         }
     ]
 }
