@@ -93,7 +93,7 @@ void QKD_LDPC_interactive_simulation(fs::path matrix_dir_path)
     int *bob_bit_array = new int[num_bit_nodes];
 
     XoshiroCpp::Xoshiro256PlusPlus prng(CFG.SIMULATION_SEED); 
-    double code_rate = static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes;
+    double code_rate = 1. - (static_cast<double>(matrix.num_check_nodes) / matrix.num_bit_nodes);
     std::vector<double> QBER = get_rate_based_QBER_range(code_rate, CFG.R_QBER_PARAMETERS);
     for (size_t i = 0; i < QBER.size(); i++)
     {
